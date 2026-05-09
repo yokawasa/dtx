@@ -1,8 +1,8 @@
-# envx 設計書
+# dtx 設計書
 
 ## 1. 目的
 
-envxは、ローカル環境における環境変数（APIキーなどの秘匿情報）を、安全かつ効率的に管理・切り替えるためのCLIツールである。
+dtxは、ローカル環境における環境変数（APIキーなどの秘匿情報）を、安全かつ効率的に管理・切り替えるためのCLIツールである。
 
 主な目的は以下の通り。
 
@@ -24,12 +24,12 @@ envxは、ローカル環境における環境変数（APIキーなどの秘匿�
 
 ### 2.2 実行経路の強制
 
-* 環境変数の利用は `envx run` のみ許可
+* 環境変数の利用は `dtx run` のみ許可
 * 通常コマンドと完全に分離する
 
 ```bash
 npm start        # 秘匿情報なし
-envx run ...     # 秘匿情報あり
+dtx run ...     # 秘匿情報あり
 ```
 
 ---
@@ -51,7 +51,7 @@ envx run ...     # 秘匿情報あり
 ## 3. ディレクトリ構造
 
 ```text
-~/.envx/
+~/.dtx/
   envs/
     dev.enc
     prod.enc
@@ -70,7 +70,7 @@ envx run ...     # 秘匿情報あり
 
 ### 権限設定
 
-* ~/.envx : 700
+* ~/.dtx : 700
 * 各ファイル : 600
 
 ※ユーザー本人のみアクセス可能
@@ -82,21 +82,21 @@ envx run ...     # 秘匿情報あり
 ### 4.1 コマンド一覧
 
 ```bash
-envx use <env>
-envx current
-envx ls
-envx run [env] -- <command>
-envx edit <env>
+dtx use <env>
+dtx current
+dtx ls
+dtx run [env] -- <command>
+dtx edit <env>
 ```
 
 ---
 
 ### 4.2 各コマンドの挙動
 
-#### envx use
+#### dtx use
 
 ```bash
-envx use dev
+dtx use dev
 ```
 
 * currentを書き換えるのみ
@@ -104,11 +104,11 @@ envx use dev
 
 ---
 
-#### envx run
+#### dtx run
 
 ```bash
-envx run -- npm start
-envx run prod -- npm start
+dtx run -- npm start
+dtx run prod -- npm start
 ```
 
 * envを復号してコマンド実行
@@ -123,30 +123,30 @@ Using env: dev
 
 ---
 
-#### envx current
+#### dtx current
 
 ```bash
-envx current
+dtx current
 ```
 
 * 現在のenv名を表示
 
 ---
 
-#### envx ls
+#### dtx ls
 
 ```bash
-envx ls
+dtx ls
 ```
 
 * 利用可能なenv一覧を表示
 
 ---
 
-#### envx edit
+#### dtx edit
 
 ```bash
-envx edit dev
+dtx edit dev
 ```
 
 * 安全にenvを編集
@@ -157,7 +157,7 @@ envx edit dev
 
 ### 5.1 実行フロー
 
-envx run 実行時：
+dtx run 実行時：
 
 1. 対象envを特定
 2. 暗号化ファイルを復号
@@ -180,7 +180,7 @@ envx run 実行時：
 ### 6.1 分離
 
 * 通常コマンドとenv付き実行を分離
-* 明示的にenvxを通さないと利用不可
+* 明示的にdtxを通さないと利用不可
 
 ---
 
@@ -230,7 +230,7 @@ envx run 実行時：
 
 対策：
 
-* envx run時にenv名表示
+* dtx run時にenv名表示
 * 危険env（prodなど）は確認可能
 
 ---
@@ -259,69 +259,85 @@ envx run 実行時：
 
 ### 1. dotenvxとの具体的な連携方法
 
-envxは暗号処理そのものを再実装せず、dotenvxを暗号化・復号・実行時注入のバックエンドとして利用する。
+dtxは暗号処理そのものを再実装せず、dotenvxを暗号化・復号・実行時注入のバックエンドとして利用する。
 
 #### 基本方針
 
-* envxは「どのenvを使うか」を管理する
+* dtxは「どのenvを使うか」を管理する
 * dotenvxは「envをどう暗号化・復号するか」を担当する
-* `envx run` は、対象envを決定したうえでdotenvx経由でコマンドを実行する
+* `dtx run` は、対象envを決定したうえでdotenvx経由でコマンドを実行する
+* dotenvxは必須依存とする
+* dotenvx CLIではなく、dotenvxのライブラリAPIを利用する
 
 #### envファイルの扱い
 
 内部保存形式はdotenvx互換のenvファイルとする。
 
 ```text
-~/.envx/
+~/.dtx/
   envs/
-    dev
-    prod
+    dev.enc
+    prod.enc
   current
   keys/
     dev
     prod
 ```
 
-* `envs/<env>` はdotenvxで暗号化されたenvファイル
+* `envs/<env>.enc` はdotenvxで暗号化されたenvファイル
 * `keys/<env>` は対象envの復号キーを保持する
 * env名とファイル名は1対1で対応する
 
-※ 既存案の `dev.enc` のような拡張子を使うか、拡張子なしにするかは実装時に決定する。
+拡張子は `.enc` に固定する。
 
 #### run連携
 
 ```bash
-envx run -- npm start
-envx run prod -- npm start
+dtx run -- npm start
+dtx run prod -- npm start
 ```
 
 内部的には以下の流れに変換する。
 
 1. 対象envを決定
 2. 対象envの復号キーを読み込む
-3. dotenvxにenvファイルと復号キーを渡す
-4. dotenvx経由でコマンドを実行する
+3. dotenvxのライブラリAPIにenvファイルと復号キーを渡す
+4. 復号された環境変数を子プロセスに注入する
+5. コマンドをexecで実行する
 
 イメージ：
 
-```bash
-DOTENV_PRIVATE_KEY=... dotenvx run -f ~/.envx/envs/dev -- npm start
+```text
+dtx
+  -> load ~/.dtx/envs/dev.enc
+  -> decrypt via dotenvx library API
+  -> exec npm start with decrypted env
 ```
 
-envx側では、ユーザーが直接 `DOTENV_PRIVATE_KEY` を意識しなくてよい状態を目指す。
+dtx側では、ユーザーが直接 `DOTENV_PRIVATE_KEY` や `dotenvx run` を意識しなくてよい状態を目指す。
+
+#### 出力制御
+
+デフォルトでは、dotenvx由来の標準出力は表示しない。
+
+* 通常時は `--quiet` 相当に抑制する
+* `dtx run --verbose ...` の場合のみ、dotenvx由来の標準出力を表示する
+* 実行対象コマンドの標準出力・標準エラーは通常どおり表示する
+
+これにより、通常利用時はdtxの出力を最小化しつつ、トラブルシュート時にはdotenvx側の詳細情報を確認できる。
 
 #### edit連携
 
 ```bash
-envx edit dev
+dtx edit dev
 ```
 
 編集時は一時ファイルを利用する。
 
-1. `envs/dev` を一時ファイルへ復号
+1. `envs/dev.enc` を一時ファイルへ復号
 2. エディタで編集
 3. 保存後にdotenvxで再暗号化
-4. 暗号化結果を `envs/dev` へ反映
+4. 暗号化結果を `envs/dev.enc` へ反映
 5. 一時ファイルを削除
 
 このとき、既存の公開鍵・秘密鍵を再利用するか、新しい鍵を発行するかのルールを明確化する必要がある。
@@ -336,26 +352,29 @@ envx edit dev
 * 復号に失敗した
 * 実行コマンドが失敗した
 
-envxはdotenvxのエラーをそのまま露出せず、envxの文脈で理解できるメッセージに変換する。
+dotenvxは必須依存のため、起動時または初期化時に利用可能性を検証する。
+
+dtxはdotenvxのエラーをそのまま露出せず、dtxの文脈で理解できるメッセージに変換する。ただし、`--verbose` 指定時はdotenvx由来の詳細も表示する。
 
 ```text
-envx: failed to decrypt env "prod"
-envx: dotenvx is not installed
-envx: current env is not set
+dtx: failed to decrypt env "prod"
+dtx: dotenvx dependency is not available
+dtx: current env is not set
 ```
 
-#### 未決事項
+#### 決定事項
 
-* dotenvxを必須依存にするか、初回実行時に存在チェックするか
-* dotenvx CLIをサブプロセスとして呼ぶか、ライブラリAPIを利用するか
-* `envs/<env>` の拡張子をどうするか
-* dotenvxの標準出力を表示するか、`--quiet` 相当に抑制するか
+* dotenvxは必須依存とする
+* dotenvx CLIではなく、dotenvxのライブラリAPIを利用する
+* envファイルのパスは `envs/<env>.enc` とする
+* dotenvx由来の標準出力はデフォルトで表示しない
+* `--verbose` 指定時のみdotenvx由来の標準出力を表示する
 
 ---
 
 ### 2. 暗号鍵の管理方法
 
-暗号鍵は、envファイル本体よりも強く保護する必要がある。envxでは、鍵の保存先を抽象化し、最初は実装しやすい方式から始める。
+暗号鍵は、envファイル本体よりも強く保護する必要がある。dtxでは、鍵の保存先を抽象化し、最初は実装しやすい方式から始める。
 
 #### 管理対象
 
@@ -367,14 +386,14 @@ dotenvxの暗号化モデルに合わせ、少なくとも以下を扱う。
 * 秘密鍵
   復号に必要な鍵
 
-envxが特に保護すべき対象は秘密鍵である。
+dtxが特に保護すべき対象は秘密鍵である。
 
 #### 保存方式の候補
 
 ##### ローカルファイル方式
 
 ```text
-~/.envx/
+~/.dtx/
   keys/
     dev
     prod
@@ -412,9 +431,9 @@ macOS Keychain、Windows Credential Manager、Linux Secret Serviceなどを利�
 
 初期実装では以下の方針とする。
 
-1. 秘密鍵は `~/.envx/keys/<env>` に保存
+1. 秘密鍵は `~/.dtx/keys/<env>` に保存
 2. 権限は600を強制
-3. `envx doctor` で権限不備を検出
+3. `dtx doctor` で権限不備を検出
 4. 将来的にkey providerを差し替え可能にする
 
 ```text
@@ -424,20 +443,20 @@ KeyProvider
   os-keychain
 ```
 
-envx本体は保存方式に依存せず、KeyProvider経由で秘密鍵を取得する。
+dtx本体は保存方式に依存せず、KeyProvider経由で秘密鍵を取得する。
 
 #### 未決事項
 
 * 複数envで同じ鍵を共有するか、envごとに鍵を分けるか
 * 鍵ローテーションをどのコマンドで扱うか
 * CI向けに秘密鍵を環境変数から渡す方式を正式サポートするか
-* 鍵バックアップの責任範囲をどこまでenvxが持つか
+* 鍵バックアップの責任範囲をどこまでdtxが持つか
 
 ---
 
 ### 3. シェル統合
 
-シェル統合は、通常利用時のミスを減らすための補助機能とする。環境変数の注入は引き続き `envx run` のみに限定し、シェル統合によって現在のシェルへ秘密情報を常駐させない。
+シェル統合は、通常利用時のミスを減らすための補助機能とする。環境変数の注入は引き続き `dtx run` のみに限定し、シェル統合によって現在のシェルへ秘密情報を常駐させない。
 
 #### 補完機能
 
@@ -456,11 +475,11 @@ envx本体は保存方式に依存せず、KeyProvider経由で秘密鍵を取�
 例：
 
 ```bash
-envx use <TAB>
-envx run <TAB>
+dtx use <TAB>
+dtx run <TAB>
 ```
 
-env名補完は `~/.envx/envs/` の一覧を元に生成する。
+env名補完は `~/.dtx/envs/` の一覧を元に生成する。
 
 #### プロンプト表示
 
@@ -469,7 +488,7 @@ env名補完は `~/.envx/envs/` の一覧を元に生成する。
 例：
 
 ```text
-[envx:dev] ~/app %
+[dtx:dev] ~/app %
 ```
 
 表示対象は `current` に保存されたenv名のみとする。秘密情報やenvの中身は一切読み込まない。
@@ -480,7 +499,7 @@ env名補完は `~/.envx/envs/` の一覧を元に生成する。
 
 * プロンプト表示用に現在env名を取得する
 * 補完関数を読み込む
-* 必要に応じて `envx current` の結果をキャッシュする
+* 必要に応じて `dtx current` の結果をキャッシュする
 
 禁止事項：
 
@@ -493,22 +512,21 @@ env名補完は `~/.envx/envs/` の一覧を元に生成する。
 将来的に以下のコマンドを追加する。
 
 ```bash
-envx init shell
-envx init completion
+dtx init shell
+dtx init completion
 ```
 
 出力例：
 
 ```bash
-eval "$(envx init shell)"
+eval "$(dtx init shell)"
 ```
 
 シェル設定ファイルへの自動追記は行わず、ユーザーが明示的に追加する形式を基本とする。
 
 #### 未決事項
 
-* プロンプト表示をenvx本体で提供するか、サンプルスクリプトに留めるか
+* プロンプト表示をdtx本体で提供するか、サンプルスクリプトに留めるか
 * `current` の読み取り頻度をどう抑えるか
 * プロジェクトディレクトリごとのcurrentをサポートするか
 * `direnv` のような自動切り替えをサポート対象外として明記するか
-
