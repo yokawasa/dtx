@@ -1,0 +1,57 @@
+name: Claude PR Comment Review
+on:
+  # PRの会話タブへのコメント
+  issue_comment:
+    types: [created]
+  # インラインコメントへの返信
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    # issue_comment（PRの会話タブ）と pull_request_review_comment（インラインコメントへの返信）を別々に評価
+    # どちらも @claude を含み、Bot以外のユーザーが投稿した場合に実行
+    if: |
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(github.event.comment.body, '@claude') &&
+        github.event.comment.user.type != 'Bot'
+      ) ||
+      (
+        github.event_name == 'pull_request_review_comment' &&
+        contains(github.event.comment.body, '@claude') &&
+        github.event.comment.user.type != 'Bot'
+      )
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # NOTE:PR番号取得方法
+          # - issue_comment → github.event.issue.number
+          # - pull_request_review_comment → github.event.pull_request.number
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || github.event.pull_request.number }}
+            USER REQUEST: ${{ github.event.comment.body }}
+
+            Review the PR according to the above request, and add inline comments for any issues found.
+          # prompt: |
+          #   REPO: ${{ github.repository }}
+          #   PR NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || github.event.pull_request.number }}
+          #   USER REQUEST: ${{ github.event.comment.body }}
+
+          #   上記のリクエストに従ってPRをレビューし、問題箇所にはインラインコメントを付けてください。
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"

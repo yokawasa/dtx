@@ -1,0 +1,68 @@
+name: Claude Code PR Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
+
+jobs:
+  claude-review:
+    # Optional: Filter by PR author
+    # if: |
+    #   github.event.pull_request.user.login == 'external-contributor' ||
+    #   github.event.pull_request.user.login == 'new-developer' ||
+    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Please review this PR. Check the following aspects:
+            - Code quality and best practices
+            - Bugs and potential issues
+            - Security concerns
+            - Performance impact
+
+            Add inline comments using `mcp__github_inline_comment__create_inline_comment` for any issues found.
+            Post an overall summary using `gh pr comment`.
+
+          # prompt: |
+          #   REPO: ${{ github.repository }}
+          #   PR NUMBER: ${{ github.event.pull_request.number }}
+
+          #   このPRをレビューしてください。以下の観点で確認してください：
+          #   - コード品質とベストプラクティス
+          #   - バグや潜在的な問題
+          #   - セキュリティ上の懸念
+          #   - パフォーマンスへの影響
+
+          #   問題箇所には `mcp__github_inline_comment__create_inline_comment` でインラインコメントを付けてください。
+          #   全体サマリーは `gh pr comment` でポストしてください。
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://code.claude.com/docs/en/cli-reference for available options
+
