@@ -160,18 +160,21 @@ dtx edit dev
 dtx run 実行時：
 
 1. 対象envを特定
-2. 暗号化ファイルを復号
-3. 一時的に環境変数を注入
-4. コマンドをexecで実行
+2. 対象envの復号キーを読み込む
+3. dotenvx CLI adapterにenvファイルと復号キーを渡す
+4. dotenvx CLI経由でコマンドを実行する
 5. 復号データを破棄
 
 ---
 
-### 5.2 execの採用理由
+### 5.2 実行方式の採用理由
 
-* 親プロセスにenvを残さない
-* プロセス構造がシンプル
-* 環境変数の漏れを防ぐ
+実装ではGoからdotenvx CLIをサブプロセスとして起動し、dotenvx CLI経由で対象コマンドを実行する。
+
+* dtx本体に復号済みenvを長時間保持しない
+* dotenvxの暗号化・復号仕様を再実装しない
+* dtxの責務をenv選択と実行ゲートに限定できる
+* 終了コードとシグナルは実行対象コマンドの結果に追従させる
 
 ---
 
@@ -267,7 +270,8 @@ dtxは暗号処理そのものを再実装せず、dotenvxを暗号化・復号�
 * dotenvxは「envをどう暗号化・復号するか」を担当する
 * `dtx run` は、対象envを決定したうえでdotenvx経由でコマンドを実行する
 * dotenvxは必須依存とする
-* dotenvx CLIではなく、dotenvxのライブラリAPIを利用する
+* dotenvx CLIをサブプロセスとして利用する
+* dotenvx CLI呼び出しはadapter層に閉じ込める
 
 #### envファイルの扱い
 
@@ -301,20 +305,21 @@ dtx run prod -- npm start
 
 1. 対象envを決定
 2. 対象envの復号キーを読み込む
-3. dotenvxのライブラリAPIにenvファイルと復号キーを渡す
-4. 復号された環境変数を子プロセスに注入する
-5. コマンドをexecで実行する
+3. dotenvx CLI adapterにenvファイルと復号キーを渡す
+4. dotenvx CLIをサブプロセスとして起動する
+5. dotenvx CLI経由でコマンドを実行する
 
 イメージ：
 
 ```text
 dtx
-  -> load ~/.dtx/envs/dev.enc
-  -> decrypt via dotenvx library API
-  -> exec npm start with decrypted env
+  -> resolve ~/.dtx/envs/dev.enc
+  -> load ~/.dtx/keys/dev
+  -> invoke dotenvx CLI through adapter
+  -> dotenvx run -f ~/.dtx/envs/dev.enc -- npm start
 ```
 
-dtx側では、ユーザーが直接 `DOTENV_PRIVATE_KEY` や `dotenvx run` を意識しなくてよい状態を目指す。
+dtx側では、ユーザーが直接 `DOTENV_PRIVATE_KEY` や `dotenvx run` を意識しなくてよい状態を目指す。dotenvx CLI呼び出しの詳細はadapter層に閉じ込める。
 
 #### 出力制御
 
@@ -365,7 +370,8 @@ dtx: current env is not set
 #### 決定事項
 
 * dotenvxは必須依存とする
-* dotenvx CLIではなく、dotenvxのライブラリAPIを利用する
+* dotenvx CLIをサブプロセスとして利用する
+* dotenvx CLI呼び出しはadapter層に閉じ込める
 * envファイルのパスは `envs/<env>.enc` とする
 * dotenvx由来の標準出力はデフォルトで表示しない
 * `--verbose` 指定時のみdotenvx由来の標準出力を表示する
