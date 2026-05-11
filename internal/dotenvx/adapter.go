@@ -42,7 +42,7 @@ func (a Adapter) Run(envFile string, keyFile string, command []string, verbose b
 	}
 
 	args := a.baseArgs(verbose, "run")
-	args = append(args, "--no-ops", "--strict", "-f", envFile, "-fk", keyFile, "--")
+	args = append(args, "--strict", "-f", envFile, "-fk", keyFile, "--")
 	args = append(args, command...)
 	code, err := a.Runner.Run(a.Binary, args, nil)
 	if err != nil {
@@ -57,7 +57,7 @@ func (a Adapter) Decrypt(envFile string, keyFile string, verbose bool) ([]byte, 
 	}
 
 	args := a.baseArgs(verbose, "decrypt")
-	args = append(args, "--no-ops", "--stdout", "-f", envFile, "-fk", keyFile)
+	args = append(args, "--stdout", "-f", envFile, "-fk", keyFile)
 	stdout, stderr, code, err := a.Runner.Capture(a.Binary, args, nil)
 	if err != nil {
 		return nil, fmt.Errorf("run dotenvx decrypt: %w", err)
@@ -77,7 +77,7 @@ func (a Adapter) Encrypt(envFile string, keyFile string, verbose bool) error {
 	}
 
 	args := a.baseArgs(verbose, "encrypt")
-	args = append(args, "--no-ops", "-f", envFile, "-fk", keyFile)
+	args = append(args, "-f", envFile, "-fk", keyFile)
 	if verbose {
 		code, err := a.Runner.Run(a.Binary, args, nil)
 		if err != nil {

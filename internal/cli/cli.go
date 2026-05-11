@@ -1,10 +1,11 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"strings"
 
+	"github.com/yokawasa/dtx/internal/apperr"
 	"github.com/yokawasa/dtx/internal/command"
 )
 
@@ -18,7 +19,8 @@ const usage = `Usage:
 
 func Run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf(strings.TrimSpace(usage))
+		_, _ = fmt.Fprint(stderr, usage)
+		return apperr.Silent(2)
 	}
 	if args[0] == "-h" || args[0] == "--help" {
 		_, _ = fmt.Fprint(stdout, usage)
@@ -37,32 +39,48 @@ func Run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 	switch args[0] {
 	case "use":
 		if len(args) != 2 {
-			return fmt.Errorf("usage: dtx use <env>")
+			return printUsageError(stderr, "usage: dtx use <env>")
 		}
 		return command.Use(ctx, args[1])
 	case "current":
 		if len(args) != 1 {
-			return fmt.Errorf("usage: dtx current")
+			return printUsageError(stderr, "usage: dtx current")
 		}
 		return command.Current(ctx)
 	case "ls":
 		if len(args) != 1 {
-			return fmt.Errorf("usage: dtx ls")
+			return printUsageError(stderr, "usage: dtx ls")
 		}
 		return command.List(ctx)
 	case "run":
 		opts, err := parseRunArgs(args[1:])
 		if err != nil {
+			if isUsageError(err) {
+				return printUsageError(stderr, err.Error())
+			}
 			return err
 		}
 		return command.Run(ctx, opts)
 	case "edit":
 		env, verbose, err := parseEditArgs(args[1:])
 		if err != nil {
+			if isUsageError(err) {
+				return printUsageError(stderr, err.Error())
+			}
 			return err
 		}
 		return command.Edit(ctx, env, verbose)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func isUsageError(err error) bool {
+	var usageErr usageError
+	return errors.As(err, &usageErr)
+}
+
+func printUsageError(stderr io.Writer, message string) error {
+	_, _ = fmt.Fprintln(stderr, message)
+	return apperr.Silent(2)
 }

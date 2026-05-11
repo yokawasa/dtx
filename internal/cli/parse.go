@@ -58,3 +58,13 @@ func parseEditArgs(args []string) (string, bool, error) {
 	}
 	return env, verbose, nil
 }
+
+type usageError string
+
+func (e usageError) Error() string {
+	return string(e)
+}
+
+func newUsageError(message string) error {
+	return usageError(message)
+}
