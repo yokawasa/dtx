@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/yokawasa/dtx/internal/apperr"
 )
 
 func TestUseCurrentAndList(t *testing.T) {
@@ -114,6 +116,69 @@ func TestEditCreatesEnvWithFakeDotenvx(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "keys", "dev")); err != nil {
 		t.Fatalf("key file was not created: %v", err)
+	}
+}
+
+func TestUsageErrorsPrintPlainUsageAndExitSilently(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		wantStderr string
+	}{
+		{
+			name:       "no args",
+			args:       nil,
+			wantStderr: usage,
+		},
+		{
+			name:       "use args",
+			args:       []string{"use"},
+			wantStderr: "usage: dtx use <env>\n",
+		},
+		{
+			name:       "current args",
+			args:       []string{"current", "extra"},
+			wantStderr: "usage: dtx current\n",
+		},
+		{
+			name:       "ls args",
+			args:       []string{"ls", "extra"},
+			wantStderr: "usage: dtx ls\n",
+		},
+		{
+			name:       "run args",
+			args:       []string{"run", "dev"},
+			wantStderr: "usage: dtx run [env] [--verbose] -- <command>\n",
+		},
+		{
+			name:       "edit args",
+			args:       []string{"edit", "dev", "prod"},
+			wantStderr: "usage: dtx edit <env> [--verbose]\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			err := Run(tt.args, nil, &stdout, &stderr)
+			if err == nil {
+				t.Fatal("expected usage error")
+			}
+			if !apperr.IsSilent(err) {
+				t.Fatalf("expected silent error, got %v", err)
+			}
+			if got := apperr.ExitCode(err); got != 2 {
+				t.Fatalf("exit code = %d, want 2", got)
+			}
+			if got := stdout.String(); got != "" {
+				t.Fatalf("stdout = %q", got)
+			}
+			if got := stderr.String(); got != tt.wantStderr {
+				t.Fatalf("stderr = %q, want %q", got, tt.wantStderr)
+			}
+		})
 	}
 }
 

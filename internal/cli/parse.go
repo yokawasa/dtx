@@ -16,7 +16,7 @@ func parseRunArgs(args []string) (command.RunOptions, error) {
 		}
 	}
 	if separator == -1 {
-		return opts, fmt.Errorf("usage: dtx run [env] [--verbose] -- <command>")
+		return opts, newUsageError("usage: dtx run [env] [--verbose] -- <command>")
 	}
 
 	prefix := args[:separator]
@@ -26,7 +26,7 @@ func parseRunArgs(args []string) (command.RunOptions, error) {
 			opts.Verbose = true
 		default:
 			if opts.Env != "" {
-				return opts, fmt.Errorf("usage: dtx run [env] [--verbose] -- <command>")
+				return opts, newUsageError("usage: dtx run [env] [--verbose] -- <command>")
 			}
 			opts.Env = arg
 		}
@@ -48,13 +48,13 @@ func parseEditArgs(args []string) (string, bool, error) {
 			verbose = true
 		default:
 			if env != "" {
-				return "", false, fmt.Errorf("usage: dtx edit <env> [--verbose]")
+				return "", false, newUsageError("usage: dtx edit <env> [--verbose]")
 			}
 			env = arg
 		}
 	}
 	if env == "" {
-		return "", false, fmt.Errorf("usage: dtx edit <env> [--verbose]")
+		return "", false, newUsageError("usage: dtx edit <env> [--verbose]")
 	}
 	return env, verbose, nil
 }
