@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 )
 
@@ -64,16 +63,13 @@ func (r Runner) Capture(name string, args []string, env []string) ([]byte, []byt
 }
 
 func (r Runner) RunEditor(editor, path string) error {
-	if strings.TrimSpace(editor) == "" {
+	fields := strings.Fields(editor)
+	if len(fields) == 0 {
 		return fmt.Errorf("editor is not set")
 	}
 
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/C", editor+" "+shellQuote(path))
-	} else {
-		cmd = exec.Command("sh", "-c", editor+" "+shellQuote(path))
-	}
+	args := append(fields[1:], path)
+	cmd := exec.Command(fields[0], args...)
 	cmd.Stdin = r.Stdin
 	cmd.Stdout = r.Stdout
 	cmd.Stderr = r.Stderr
@@ -87,8 +83,4 @@ func (r Runner) RunEditor(editor, path string) error {
 		cmd.Stderr = os.Stderr
 	}
 	return cmd.Run()
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
