@@ -119,6 +119,62 @@ func TestEditCreatesEnvWithFakeDotenvx(t *testing.T) {
 	}
 }
 
+func TestEditDoesNotLeavePartialStateWhenNewEnvHasNoVariables(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test uses POSIX shell scripts")
+	}
+
+	home := t.TempDir()
+	t.Setenv("DTX_HOME", home)
+	installFakeDotenvx(t)
+	editorPath := installEditor(t, "printf '# no variables\\n' > \"$1\"\n")
+	t.Setenv("VISUAL", editorPath)
+
+	err := Run([]string{"edit", "empty"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected edit to fail")
+	}
+	if !strings.Contains(err.Error(), `env "empty" does not contain variables to encrypt`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "envs", "empty.enc")); !os.IsNotExist(err) {
+		t.Fatalf("env file exists after failed edit: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "keys", "empty")); !os.IsNotExist(err) {
+		t.Fatalf("key file exists after failed edit: %v", err)
+	}
+}
+
+func TestEditUsesTemporaryKeyUnderDtxHome(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test uses POSIX shell scripts")
+	}
+
+	home := t.TempDir()
+	t.Setenv("DTX_HOME", home)
+	installFakeDotenvx(t)
+	keyLog := filepath.Join(t.TempDir(), "key-path")
+	t.Setenv("DTX_FAKE_KEY_LOG", keyLog)
+	editorPath := installEditor(t, "printf 'HELLO=world\\n' > \"$1\"\n")
+	t.Setenv("VISUAL", editorPath)
+
+	if err := Run([]string{"edit", "dev"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("edit failed: %v", err)
+	}
+
+	data, err := os.ReadFile(keyLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(got, home+string(os.PathSeparator)) {
+		t.Fatalf("temporary key path = %q, want under %q", got, home)
+	}
+	if got == filepath.Join(home, "keys", "dev") {
+		t.Fatalf("encrypt used target key path directly: %q", got)
+	}
+}
+
 func TestUsageErrorsPrintPlainUsageAndExitSilently(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -213,9 +269,14 @@ case "$cmd" in
       esac
       shift
     done
-    printf '\nENCRYPTED_BY_FAKE_DOTENVX=1\n' >> "$file"
-    mkdir -p "$(dirname "$key")"
-    printf 'KEY=1\n' > "$key"
+    if [ -n "$DTX_FAKE_KEY_LOG" ]; then
+      printf '%s\n' "$key" > "$DTX_FAKE_KEY_LOG"
+    fi
+    if grep -Eq '^[A-Za-z_][A-Za-z0-9_]*=' "$file"; then
+      printf '\nENCRYPTED_BY_FAKE_DOTENVX=1\n' >> "$file"
+      mkdir -p "$(dirname "$key")"
+      printf 'KEY=1\n' > "$key"
+    fi
     ;;
 esac
 `
