@@ -2,6 +2,7 @@ package dotenvx
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -65,6 +66,48 @@ func TestAdapterDoesNotPassNoOpsFlag(t *testing.T) {
 	}
 }
 
+func TestDecryptFailureWritesCapturedStderrWhenQuiet(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test uses POSIX shell scripts")
+	}
+
+	installFailingFakeDotenvx(t, "decrypt", 7, "wrong key\n")
+	var stderr bytes.Buffer
+	adapter := NewAdapter(nil, &bytes.Buffer{}, &stderr)
+
+	_, err := adapter.Decrypt("env.enc", "key", false)
+	if err == nil {
+		t.Fatal("expected decrypt failure")
+	}
+	if got := err.Error(); got != "failed to decrypt env file (exit 7)" {
+		t.Fatalf("error = %q", got)
+	}
+	if got := stderr.String(); got != "wrong key\n" {
+		t.Fatalf("stderr = %q", got)
+	}
+}
+
+func TestEncryptFailureWritesCapturedStderrWhenQuiet(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test uses POSIX shell scripts")
+	}
+
+	installFailingFakeDotenvx(t, "encrypt", 9, "malformed env\n")
+	var stderr bytes.Buffer
+	adapter := NewAdapter(nil, &bytes.Buffer{}, &stderr)
+
+	err := adapter.Encrypt("env.enc", "key", false)
+	if err == nil {
+		t.Fatal("expected encrypt failure")
+	}
+	if got := err.Error(); got != "failed to encrypt env file (exit 9)" {
+		t.Fatalf("error = %q", got)
+	}
+	if got := stderr.String(); got != "malformed env\n" {
+		t.Fatalf("stderr = %q", got)
+	}
+}
+
 func installFakeDotenvx(t *testing.T) string {
 	t.Helper()
 
@@ -90,6 +133,27 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("DTX_DOTENVX_ARGS_FILE", argsFile)
 	return argsFile
+}
+
+func installFailingFakeDotenvx(t *testing.T, command string, exitCode int, stderr string) {
+	t.Helper()
+
+	binDir := t.TempDir()
+	path := filepath.Join(binDir, "dotenvx")
+	script := `#!/bin/sh
+if [ "$2" = "$DTX_FAIL_COMMAND" ]; then
+  printf '%s' "$DTX_FAIL_STDERR" >&2
+  exit "$DTX_FAIL_CODE"
+fi
+`
+	if err := os.WriteFile(path, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("DTX_FAIL_COMMAND", command)
+	t.Setenv("DTX_FAIL_CODE", fmt.Sprint(exitCode))
+	t.Setenv("DTX_FAIL_STDERR", stderr)
 }
 
 func readArgs(t *testing.T, path string) []string {

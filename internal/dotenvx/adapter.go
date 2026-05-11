@@ -62,11 +62,12 @@ func (a Adapter) Decrypt(envFile string, keyFile string, verbose bool) ([]byte, 
 	if err != nil {
 		return nil, fmt.Errorf("run dotenvx decrypt: %w", err)
 	}
-	if verbose && len(stderr) > 0 && a.Stderr != nil {
-		_, _ = a.Stderr.Write(stderr)
-	}
 	if code != 0 {
-		return nil, fmt.Errorf("failed to decrypt env file")
+		a.writeCapturedStderr(stderr)
+		return nil, fmt.Errorf("failed to decrypt env file (exit %d)", code)
+	}
+	if verbose {
+		a.writeCapturedStderr(stderr)
 	}
 	return stdout, nil
 }
@@ -84,19 +85,19 @@ func (a Adapter) Encrypt(envFile string, keyFile string, verbose bool) error {
 			return fmt.Errorf("run dotenvx encrypt: %w", err)
 		}
 		if code != 0 {
-			return fmt.Errorf("failed to encrypt env file")
+			return fmt.Errorf("failed to encrypt env file (exit %d)", code)
 		}
 		return nil
 	}
 
 	stdout, stderr, code, err := a.Runner.Capture(a.Binary, args, nil)
 	_ = stdout
-	_ = stderr
 	if err != nil {
 		return fmt.Errorf("run dotenvx encrypt: %w", err)
 	}
 	if code != 0 {
-		return fmt.Errorf("failed to encrypt env file")
+		a.writeCapturedStderr(stderr)
+		return fmt.Errorf("failed to encrypt env file (exit %d)", code)
 	}
 	return nil
 }
@@ -106,4 +107,10 @@ func (a Adapter) baseArgs(verbose bool, command string) []string {
 		return []string{"--verbose", command}
 	}
 	return []string{"--quiet", command}
+}
+
+func (a Adapter) writeCapturedStderr(stderr []byte) {
+	if len(stderr) > 0 && a.Stderr != nil {
+		_, _ = a.Stderr.Write(stderr)
+	}
 }
