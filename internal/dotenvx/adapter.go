@@ -28,7 +28,7 @@ func NewAdapter(stdin io.Reader, stdout io.Writer, stderr io.Writer) Adapter {
 
 func (a Adapter) CheckAvailable() error {
 	if _, err := exec.LookPath(a.Binary); err != nil {
-		return fmt.Errorf("dotenvx dependency is not available")
+		return fmt.Errorf("dotenvx is required but not found in PATH (install dotenvx: https://dotenvx.com/docs/install)")
 	}
 	return nil
 }
