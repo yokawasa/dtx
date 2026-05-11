@@ -28,7 +28,12 @@ func Edit(ctx Context, env string, verbose bool) error {
 	if err != nil {
 		return fmt.Errorf("create temporary directory: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	cleanupTmpDir := true
+	defer func() {
+		if cleanupTmpDir {
+			_ = os.RemoveAll(tmpDir)
+		}
+	}()
 
 	tmpEnvFile := core.SameBasePath(tmpDir, env)
 	tmpKeyFile := filepath.Join(tmpDir, env+".key")
@@ -63,27 +68,33 @@ func Edit(ctx Context, env string, verbose bool) error {
 	if err := ctx.Runner.RunEditor(editor, tmpEnvFile); err != nil {
 		return fmt.Errorf("editor failed: %w", err)
 	}
+	cleanupTmpDir = false
 
 	if err := ctx.Dotenvx.Encrypt(tmpEnvFile, tmpKeyFile, verbose); err != nil {
-		return fmt.Errorf("failed to encrypt env %q: %w", env, err)
+		return keepEditedTempDir(tmpDir, fmt.Errorf("failed to encrypt env %q: %w", env, err))
 	}
 	if !fileExists(tmpKeyFile) {
-		return fmt.Errorf("env %q does not contain variables to encrypt", env)
+		return keepEditedTempDir(tmpDir, fmt.Errorf("env %q does not contain variables to encrypt", env))
 	}
 
 	if err := core.ChmodPrivateFile(tmpEnvFile); err != nil {
-		return err
+		return keepEditedTempDir(tmpDir, err)
 	}
 	if err := core.ChmodPrivateFile(tmpKeyFile); err != nil {
-		return err
+		return keepEditedTempDir(tmpDir, err)
 	}
 
 	if err := saveEditedEnv(tmpEnvFile, tmpKeyFile, targetEnvFile, targetKeyFile, !isNewEnv, hadKey); err != nil {
-		return err
+		return keepEditedTempDir(tmpDir, err)
 	}
+	cleanupTmpDir = true
 
 	fmt.Fprintf(ctx.Stdout, "Edited env: %s\n", env)
 	return nil
+}
+
+func keepEditedTempDir(tmpDir string, err error) error {
+	return fmt.Errorf("%w; temporary edit directory kept at %s", err, tmpDir)
 }
 
 func saveEditedEnv(tmpEnvFile, tmpKeyFile, targetEnvFile, targetKeyFile string, hadEnv, hadKey bool) error {

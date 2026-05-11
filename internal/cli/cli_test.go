@@ -137,12 +137,34 @@ func TestEditDoesNotLeavePartialStateWhenNewEnvHasNoVariables(t *testing.T) {
 	if !strings.Contains(err.Error(), `env "empty" does not contain variables to encrypt`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	tmpDir := keptTempDir(t, err)
+	if !strings.HasPrefix(tmpDir, home+string(os.PathSeparator)) {
+		t.Fatalf("temporary edit directory = %q, want under %q", tmpDir, home)
+	}
+	data, readErr := os.ReadFile(filepath.Join(tmpDir, "empty.enc"))
+	if readErr != nil {
+		t.Fatalf("temporary edit file was not kept: %v", readErr)
+	}
+	if got := string(data); got != "# no variables\n" {
+		t.Fatalf("temporary edit file = %q", got)
+	}
 	if _, err := os.Stat(filepath.Join(home, "envs", "empty.enc")); !os.IsNotExist(err) {
 		t.Fatalf("env file exists after failed edit: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(home, "keys", "empty")); !os.IsNotExist(err) {
 		t.Fatalf("key file exists after failed edit: %v", err)
 	}
+}
+
+func keptTempDir(t *testing.T, err error) string {
+	t.Helper()
+
+	const marker = "temporary edit directory kept at "
+	index := strings.LastIndex(err.Error(), marker)
+	if index == -1 {
+		t.Fatalf("error does not include kept temp dir: %v", err)
+	}
+	return err.Error()[index+len(marker):]
 }
 
 func TestEditUsesTemporaryKeyUnderDtxHome(t *testing.T) {
