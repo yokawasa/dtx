@@ -76,6 +76,9 @@ func (s EnvStore) ReadCurrent() (string, error) {
 	if err := ValidateEnvName(env); err != nil {
 		return "", fmt.Errorf("current env is invalid: %w", err)
 	}
+	if !s.EnvExists(env) {
+		return "", fmt.Errorf("current env %q does not exist", env)
+	}
 	return env, nil
 }
 
