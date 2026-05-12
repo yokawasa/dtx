@@ -2,7 +2,7 @@
 
 `dtx` is a small CLI for managing encrypted `.env`-style environments on your local machine.
 
-It is built on top of the `dotenvx` CLI and gives you a narrow workflow:
+It is built on top of the [dotenvx](https://github.com/dotenvx/dotenvx) CLI and gives you a narrow workflow:
 
 * keep env files encrypted at rest
 * select the env you want to use
