@@ -180,6 +180,62 @@ dotenvx encrypt --help
 dotenvx decrypt --help
 ```
 
+## リリース
+
+リリースは GitHub Actions + GoReleaser で自動化されている。バージョンタグを push するだけで完結する。
+
+### リリース手順
+
+```bash
+# 1. main が最新の状態であることを確認
+git checkout main
+git pull
+
+# 2. 全テストが通ることを確認
+go test ./...
+
+# 3. バージョンタグを付けて push（これだけで自動リリースが走る）
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+タグ push 後、`.github/workflows/release.yml` が起動し、GitHub Release に以下が自動生成される。
+
+| 成果物 | 内容 |
+|---|---|
+| `dtx_linux_amd64.tar.gz` | Linux (x86_64) バイナリ |
+| `dtx_linux_arm64.tar.gz` | Linux (ARM64) バイナリ |
+| `dtx_darwin_amd64.tar.gz` | macOS (Intel) バイナリ |
+| `dtx_darwin_arm64.tar.gz` | macOS (Apple Silicon) バイナリ |
+| `dtx_windows_amd64.zip` | Windows (x86_64) バイナリ |
+| `checksums.txt` | 各アーカイブの SHA-256 チェックサム |
+
+### バージョン番号のルール
+
+[Semantic Versioning](https://semver.org/) に従う。
+
+* `v1.2.3` — 正式リリース（GitHub Release として公開）
+* `v1.2.3-beta.1` などサフィックスあり → pre-release として自動分類される
+
+### バージョン文字列の確認
+
+リリースバイナリには `ldflags` でバージョンが埋め込まれる。
+
+```bash
+dtx --version  # → dtx v0.1.0
+```
+
+開発ビルド（`go build` のまま）では `dtx dev` と表示される。
+
+### ローカルでのリリースビルド確認
+
+GoReleaser をインストール済みの場合、ローカルで成果物を確認できる（GitHub へは publish しない）。
+
+```bash
+goreleaser release --snapshot --clean
+# dist/ ディレクトリに各プラットフォームのバイナリが生成される
+```
+
 ## 注意事項
 
 * `dtx edit` は `$VISUAL`、次に `$EDITOR` を使う

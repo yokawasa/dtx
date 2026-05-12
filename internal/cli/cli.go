@@ -27,7 +27,7 @@ func Run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 		return nil
 	}
 	if args[0] == "-v" || args[0] == "--version" {
-		_, _ = fmt.Fprintln(stdout, "dtx dev")
+		_, _ = fmt.Fprintln(stdout, "dtx "+Version)
 		return nil
 	}
 
