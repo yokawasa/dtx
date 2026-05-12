@@ -1,54 +1,54 @@
-# dtx 設計書
+# dtx Design Document
 
-## 1. 目的
+## 1. Purpose
 
-dtxは、ローカル環境における環境変数（APIキーなどの秘匿情報）を、安全かつ効率的に管理・切り替えるためのCLIツールである。
+dtx is a CLI tool for safely and efficiently managing and switching environment variables in a local environment, including sensitive values such as API keys.
 
-主な目的は以下の通り。
+Its primary goals are:
 
-* 秘匿情報を安全に保存する
-* 環境ごとの切り替えを高速に行う
-* 誤った環境での実行を防ぐ
-
----
-
-## 2. 設計原則
-
-### 2.1 envは「完成品」として扱う
-
-* 実行時にenvを合成しない
-* 1回の実行で使用するenvは1つのみ
-* 各envは単体で完結する
+* Store sensitive information securely.
+* Switch between environments quickly.
+* Prevent commands from running in the wrong environment.
 
 ---
 
-### 2.2 実行経路の強制
+## 2. Design Principles
 
-* 環境変数の利用は `dtx run` のみ許可
-* 通常コマンドと完全に分離する
+### 2.1 Treat Each env as a Complete Unit
+
+* Do not compose envs at runtime.
+* Use only one env per execution.
+* Each env must be self-contained.
+
+---
+
+### 2.2 Enforce a Single Execution Path
+
+* Allow environment-variable-backed execution only through `dtx run`.
+* Keep it fully separate from ordinary commands.
 
 ```bash
-npm start        # 秘匿情報なし
-dtx run ...     # 秘匿情報あり
+npm start       # without secrets
+dtx run ...     # with secrets
 ```
 
 ---
 
-### 2.3 状態と実行の分離
+### 2.3 Separate State from Execution
 
-* `use` は状態の選択のみ
-* `run` が唯一の実行ゲート
-
----
-
-### 2.4 平文露出の最小化
-
-* 通常は常に暗号化状態
-* 実行・編集時のみ一時的に復号
+* `use` only selects state.
+* `run` is the only execution gate.
 
 ---
 
-## 3. ディレクトリ構造
+### 2.4 Minimize Plaintext Exposure
+
+* Keep envs encrypted at rest by default.
+* Decrypt only temporarily during execution or editing.
+
+---
+
+## 3. Directory Structure
 
 ```text
 ~/.dtx/
@@ -58,28 +58,28 @@ dtx run ...     # 秘匿情報あり
   current
 ```
 
-### 各要素の役割
+### Role of Each Element
 
-* envs/
-  暗号化されたenvファイルを格納
+* `envs/`
+  Stores encrypted env files.
 
-* current
-  現在選択されているenv名（平文の秘密は含めない）
-
----
-
-### 権限設定
-
-* ~/.dtx : 700
-* 各ファイル : 600
-
-※ユーザー本人のみアクセス可能
+* `current`
+  Stores the currently selected env name only. It must not contain plaintext secrets.
 
 ---
 
-## 4. CLI仕様
+### Permission Settings
 
-### 4.1 コマンド一覧
+* `~/.dtx`: `700`
+* Each file: `600`
+
+Only the owning user can access them.
+
+---
+
+## 4. CLI Specification
+
+### 4.1 Command List
 
 ```bash
 dtx use <env>
@@ -91,31 +91,31 @@ dtx edit <env>
 
 ---
 
-### 4.2 各コマンドの挙動
+### 4.2 Behavior of Each Command
 
-#### dtx use
+#### `dtx use`
 
 ```bash
 dtx use dev
 ```
 
-* currentを書き換えるのみ
-* 環境変数は注入しない
+* Only rewrites `current`.
+* Does not inject environment variables.
 
 ---
 
-#### dtx run
+#### `dtx run`
 
 ```bash
 dtx run -- npm start
 dtx run prod -- npm start
 ```
 
-* envを復号してコマンド実行
-* env未指定時はcurrentを使用
-* current未設定時はエラー
+* Decrypts the env and executes the command.
+* Uses `current` when no env is specified.
+* Returns an error when `current` is not set.
 
-出力例：
+Example output:
 
 ```text
 Using env: dev
@@ -123,159 +123,158 @@ Using env: dev
 
 ---
 
-#### dtx current
+#### `dtx current`
 
 ```bash
 dtx current
 ```
 
-* 現在のenv名を表示
+* Prints the current env name.
 
 ---
 
-#### dtx ls
+#### `dtx ls`
 
 ```bash
 dtx ls
 ```
 
-* 利用可能なenv一覧を表示
+* Prints the list of available envs.
 
 ---
 
-#### dtx edit
+#### `dtx edit`
 
 ```bash
 dtx edit dev
 ```
 
-* 安全にenvを編集
+* Safely edits an env.
 
 ---
 
-## 5. 実行モデル
+## 5. Execution Model
 
-### 5.1 実行フロー
+### 5.1 Execution Flow
 
-dtx run 実行時：
+When `dtx run` executes:
 
-1. 対象envを特定
-2. 対象envの復号キーを読み込む
-3. dotenvx CLI adapterにenvファイルと復号キーを渡す
-4. dotenvx CLI経由でコマンドを実行する
-5. 復号データを破棄
-
----
-
-### 5.2 実行方式の採用理由
-
-実装ではGoからdotenvx CLIをサブプロセスとして起動し、dotenvx CLI経由で対象コマンドを実行する。
-
-* dtx本体に復号済みenvを長時間保持しない
-* dotenvxの暗号化・復号仕様を再実装しない
-* dtxの責務をenv選択と実行ゲートに限定できる
-* 終了コードとシグナルは実行対象コマンドの結果に追従させる
+1. Determine the target env.
+2. Read the decryption key for that env.
+3. Pass the env file and decryption key to the dotenvx CLI adapter.
+4. Execute the command through the dotenvx CLI.
+5. Discard decrypted data.
 
 ---
 
-## 6. セキュリティ設計
+### 5.2 Why This Execution Style Was Chosen
 
-### 6.1 分離
+The implementation launches the dotenvx CLI as a subprocess from Go and executes the target command through that CLI.
 
-* 通常コマンドとenv付き実行を分離
-* 明示的にdtxを通さないと利用不可
-
----
-
-### 6.2 状態管理の安全性
-
-* currentはenv名のみ保持
-* 秘匿情報は一切含めない
+* dtx does not keep decrypted env content in memory longer than necessary.
+* dtx does not reimplement dotenvx encryption and decryption behavior.
+* dtx can keep its responsibility limited to env selection and the execution gate.
+* Exit codes and signals follow the result of the executed command.
 
 ---
 
-### 6.3 平文管理
+## 6. Security Design
 
-* 通常時は暗号化状態を維持
-* 必要時のみ復号
+### 6.1 Separation
 
----
-
-### 6.4 編集時の安全性
-
-一時ファイル方式を採用。
-
-#### フロー
-
-1. 一時ファイル作成（権限600）
-2. 復号して書き込み
-3. エディタで編集
-4. 保存後に再暗号化
-5. 一時ファイル削除
-
-#### 特徴
-
-* 平文の露出時間が短い
-* 管理可能な範囲に閉じる
+* Keep normal commands separate from env-backed execution.
+* Make secret-backed execution unavailable unless the user explicitly goes through dtx.
 
 ---
 
-## 7. リスクと対策
+### 6.2 Safety of State Management
 
-### 7.1 同一ユーザー内のアクセス
-
-* 完全防御は不可
-* ツールの目的は「誤操作防止」
+* `current` stores only the env name.
+* It never contains secret data.
 
 ---
 
-### 7.2 誤環境での実行
+### 6.3 Plaintext Handling
 
-対策：
-
-* dtx run時にenv名表示
-* 危険env（prodなど）は確認可能
+* Keep data encrypted by default.
+* Decrypt only when needed.
 
 ---
 
-### 7.3 平文漏洩
+### 6.4 Safety During Editing
 
-対策：
+Use a temporary-file workflow.
 
-* 暗号化保存
-* 一時ファイル方式
-* 即時削除
+#### Flow
+
+1. Create a temporary file with permission `600`.
+2. Decrypt and write its contents.
+3. Edit it in the editor.
+4. Re-encrypt after saving.
+5. Delete the temporary file.
+
+#### Characteristics
+
+* Plaintext is exposed only for a short period.
+* Exposure stays within a manageable boundary.
 
 ---
 
-## 8. 設計の特徴
+## 7. Risks and Mitigations
 
-* 挙動が予測可能
-* 状態と実行の責務分離
-* CLIとして直感的
-* 最小限のコマンドセット
+### 7.1 Access by the Same User
 
+* Full protection is not possible.
+* The tool is primarily intended to prevent operational mistakes.
+
+---
+
+### 7.2 Running in the Wrong Environment
+
+Mitigations:
+
+* Show the env name during `dtx run`.
+* Allow confirmation for dangerous envs such as `prod`.
+
+---
+
+### 7.3 Plaintext Leakage
+
+Mitigations:
+
+* Encrypted storage
+* Temporary-file workflow
+* Immediate deletion
+
+---
+
+## 8. Design Characteristics
+
+* Predictable behavior
+* Clear separation between state and execution responsibilities
+* Intuitive as a CLI
+* Minimal command set
 
 ## 9. Next Actions
 
-以下の3点を今後詳細設計する。
+The following three areas need more detailed design work.
 
-### 1. dotenvxとの具体的な連携方法
+### 1. Concrete Integration with dotenvx
 
-dtxは暗号処理そのものを再実装せず、dotenvxを暗号化・復号・実行時注入のバックエンドとして利用する。
+dtx will not reimplement encryption itself. Instead, it will use dotenvx as the backend for encryption, decryption, and runtime injection.
 
-#### 基本方針
+#### Basic Policy
 
-* dtxは「どのenvを使うか」を管理する
-* dotenvxは「envをどう暗号化・復号するか」を担当する
-* `dtx run` は、対象envを決定したうえでdotenvx経由でコマンドを実行する
-* dotenvxは必須依存とする
-* dotenvx CLIをサブプロセスとして利用する
-* dotenvx CLI呼び出しはadapter層に閉じ込める
+* dtx manages which env to use.
+* dotenvx is responsible for how envs are encrypted and decrypted.
+* `dtx run` determines the target env and then executes the command through dotenvx.
+* dotenvx is a required dependency.
+* Use the dotenvx CLI as a subprocess.
+* Keep dotenvx CLI calls inside an adapter layer.
 
-#### envファイルの扱い
+#### Handling env Files
 
-内部保存形式はdotenvx互換のenvファイルとする。
+The internal storage format is a dotenvx-compatible env file.
 
 ```text
 ~/.dtx/
@@ -288,28 +287,28 @@ dtxは暗号処理そのものを再実装せず、dotenvxを暗号化・復号�
     prod
 ```
 
-* `envs/<env>.enc` はdotenvxで暗号化されたenvファイル
-* `keys/<env>` は対象envの復号キーを保持する
-* env名とファイル名は1対1で対応する
+* `envs/<env>.enc` is an env file encrypted by dotenvx.
+* `keys/<env>` stores the decryption key for that env.
+* Each env name maps one-to-one to a file name.
 
-拡張子は `.enc` に固定する。
+The file extension is fixed as `.enc`.
 
-#### run連携
+#### `run` Integration
 
 ```bash
 dtx run -- npm start
 dtx run prod -- npm start
 ```
 
-内部的には以下の流れに変換する。
+Internally, this is translated into the following flow:
 
-1. 対象envを決定
-2. 対象envの復号キーを読み込む
-3. dotenvx CLI adapterにenvファイルと復号キーを渡す
-4. dotenvx CLIをサブプロセスとして起動する
-5. dotenvx CLI経由でコマンドを実行する
+1. Determine the target env.
+2. Read the decryption key for that env.
+3. Pass the env file and decryption key to the dotenvx CLI adapter.
+4. Launch the dotenvx CLI as a subprocess.
+5. Execute the command through the dotenvx CLI.
 
-イメージ：
+Conceptually:
 
 ```text
 dtx
@@ -319,47 +318,47 @@ dtx
   -> dotenvx run -f ~/.dtx/envs/dev.enc -- npm start
 ```
 
-dtx側では、ユーザーが直接 `DOTENV_PRIVATE_KEY` や `dotenvx run` を意識しなくてよい状態を目指す。dotenvx CLI呼び出しの詳細はadapter層に閉じ込める。
+From the dtx side, the goal is that users do not need to think about `DOTENV_PRIVATE_KEY` or `dotenvx run` directly. Details of the dotenvx CLI invocation stay inside the adapter layer.
 
-#### 出力制御
+#### Output Control
 
-デフォルトでは、dotenvx由来の標準出力は表示しない。
+By default, stdout originating from dotenvx is not shown.
 
-* 通常時は `--quiet` 相当に抑制する
-* `dtx run --verbose ...` の場合のみ、dotenvx由来の標準出力を表示する
-* 実行対象コマンドの標準出力・標準エラーは通常どおり表示する
+* Suppress it in normal operation using behavior equivalent to `--quiet`.
+* Show dotenvx-originated stdout only for `dtx run --verbose ...`.
+* Always show the target command's stdout and stderr normally.
 
-これにより、通常利用時はdtxの出力を最小化しつつ、トラブルシュート時にはdotenvx側の詳細情報を確認できる。
+This keeps normal dtx output minimal while still allowing dotenvx details to be inspected during troubleshooting.
 
-#### edit連携
+#### `edit` Integration
 
 ```bash
 dtx edit dev
 ```
 
-編集時は一時ファイルを利用する。
+Use a temporary file during editing.
 
-1. `envs/dev.enc` を一時ファイルへ復号
-2. エディタで編集
-3. 保存後にdotenvxで再暗号化
-4. 暗号化結果を `envs/dev.enc` へ反映
-5. 一時ファイルを削除
+1. Decrypt `envs/dev.enc` into a temporary file.
+2. Edit it in the editor.
+3. Re-encrypt it with dotenvx after saving.
+4. Write the encrypted result back to `envs/dev.enc`.
+5. Delete the temporary file.
 
-このとき、既存の公開鍵・秘密鍵を再利用するか、新しい鍵を発行するかのルールを明確化する必要がある。
+At that point, the rule for whether to reuse an existing public/private key pair or issue a new key pair must be defined explicitly.
 
-#### エラー設計
+#### Error Design
 
-以下を明確に分ける。
+Clearly distinguish the following cases:
 
-* dotenvxが見つからない
-* envファイルが存在しない
-* 復号キーが存在しない
-* 復号に失敗した
-* 実行コマンドが失敗した
+* dotenvx is not found
+* the env file does not exist
+* the decryption key does not exist
+* decryption failed
+* the executed command failed
 
-dotenvxは必須依存のため、起動時または初期化時に利用可能性を検証する。
+Because dotenvx is a required dependency, verify its availability at startup or initialization time.
 
-dtxはdotenvxのエラーをそのまま露出せず、dtxの文脈で理解できるメッセージに変換する。ただし、`--verbose` 指定時はdotenvx由来の詳細も表示する。
+dtx should not expose dotenvx errors verbatim. It should convert them into messages that make sense in dtx terms. When `--verbose` is specified, it may also show dotenvx-originated details.
 
 ```text
 dtx: failed to decrypt env "prod"
@@ -367,36 +366,36 @@ dtx: dotenvx dependency is not available
 dtx: current env is not set
 ```
 
-#### 決定事項
+#### Decisions
 
-* dotenvxは必須依存とする
-* dotenvx CLIをサブプロセスとして利用する
-* dotenvx CLI呼び出しはadapter層に閉じ込める
-* envファイルのパスは `envs/<env>.enc` とする
-* dotenvx由来の標準出力はデフォルトで表示しない
-* `--verbose` 指定時のみdotenvx由来の標準出力を表示する
+* dotenvx is a required dependency.
+* Use the dotenvx CLI as a subprocess.
+* Keep dotenvx CLI calls inside an adapter layer.
+* Use `envs/<env>.enc` as the env file path.
+* Do not show dotenvx-originated stdout by default.
+* Show dotenvx-originated stdout only when `--verbose` is specified.
 
 ---
 
-### 2. 暗号鍵の管理方法
+### 2. Encryption Key Management
 
-暗号鍵は、envファイル本体よりも強く保護する必要がある。dtxでは、鍵の保存先を抽象化し、最初は実装しやすい方式から始める。
+Encryption keys must be protected more carefully than the env files themselves. In dtx, key storage is abstracted so the implementation can start with the simplest workable option.
 
-#### 管理対象
+#### Managed Objects
 
-dotenvxの暗号化モデルに合わせ、少なくとも以下を扱う。
+To match dotenvx's encryption model, handle at least the following:
 
-* 公開鍵
-  envファイルに含めてもよい暗号化用の鍵
+* Public key
+  A key used for encryption that may be included in the env file.
 
-* 秘密鍵
-  復号に必要な鍵
+* Private key
+  A key required for decryption.
 
-dtxが特に保護すべき対象は秘密鍵である。
+The private key is the asset dtx must protect most carefully.
 
-#### 保存方式の候補
+#### Candidate Storage Options
 
-##### ローカルファイル方式
+##### Local File Storage
 
 ```text
 ~/.dtx/
@@ -405,42 +404,42 @@ dtxが特に保護すべき対象は秘密鍵である。
     prod
 ```
 
-* 実装が単純
-* クロスプラットフォームで扱いやすい
-* ファイル権限は600に固定
-* 同一ユーザー内の完全防御はできない
+* Simple to implement
+* Easy to handle across platforms
+* File permissions fixed to `600`
+* Does not provide complete protection from the same user
 
-MVPではこの方式を第一候補とする。
+For the MVP, this is the primary candidate.
 
-##### パスフレーズ方式
+##### Passphrase-Based Storage
 
-秘密鍵をさらにパスフレーズで暗号化して保存する。
+Store the private key encrypted with an additional passphrase.
 
-* 秘密鍵ファイル単体の漏洩に強い
-* 実行時にパスフレーズ入力が必要
-* 自動実行やスクリプト用途との相性が悪い
+* Stronger protection if the private key file itself leaks
+* Requires passphrase entry at runtime
+* Poor fit for automation and scripting
 
-CLIツールとしての利便性を落とすため、初期実装では必須にしない。
+Because it reduces CLI usability, it is not required in the initial implementation.
 
-##### OSキーチェーン方式
+##### OS Keychain Storage
 
-macOS Keychain、Windows Credential Manager、Linux Secret Serviceなどを利用する。
+Use macOS Keychain, Windows Credential Manager, Linux Secret Service, and similar systems.
 
-* OSの保護機構を利用できる
-* ユーザー体験がよい
-* OSごとの差異が大きい
-* CIやヘッドレス環境で扱いにくい
+* Can use OS-level protection mechanisms
+* Good user experience
+* Large differences across operating systems
+* Harder to handle in CI and headless environments
 
-将来的なオプションとして検討する。
+Consider this as a future option.
 
-#### 推奨方針
+#### Recommended Policy
 
-初期実装では以下の方針とする。
+For the initial implementation, use the following policy:
 
-1. 秘密鍵は `~/.dtx/keys/<env>` に保存
-2. 権限は600を強制
-3. `dtx doctor` で権限不備を検出
-4. 将来的にkey providerを差し替え可能にする
+1. Store private keys in `~/.dtx/keys/<env>`.
+2. Enforce permission `600`.
+3. Detect permission problems with `dtx doctor`.
+4. Make it possible to swap the key provider in the future.
 
 ```text
 KeyProvider
@@ -449,105 +448,105 @@ KeyProvider
   os-keychain
 ```
 
-dtx本体は保存方式に依存せず、KeyProvider経由で秘密鍵を取得する。
+dtx itself should not depend on the storage mechanism. It should obtain private keys through `KeyProvider`.
 
-#### 決定事項
+#### Decisions
 
-* 複数envで同じ鍵を共有しない
-* envごとに個別の鍵を持つ
-* 鍵ローテーション用のコマンドはMVPでは実装しない
-* CI向けに秘密鍵を環境変数から渡す方式はMVPでは実装しない
-* 鍵バックアップはdtxの責任範囲外とする
+* Do not share the same key across multiple envs.
+* Give each env its own key.
+* Do not implement a key rotation command in the MVP.
+* Do not implement an MVP mode that passes private keys through environment variables for CI.
+* Treat key backup as outside the responsibility of dtx.
 
-#### 将来の実装事項
+#### Future Work
 
-* 鍵ローテーション用コマンドの追加
-* CI向けに秘密鍵を環境変数から渡す方式の正式サポート
+* Add a command for key rotation.
+* Add official support for passing private keys through environment variables for CI.
 
-#### 鍵バックアップの扱い
+#### Handling Key Backups
 
-dtxは鍵バックアップ機能を提供しない。秘密鍵を紛失した場合、対応するenvファイルは復号できなくなる。
+dtx does not provide a key backup feature. If a private key is lost, the corresponding env file can no longer be decrypted.
 
-ユーザーは必要に応じて、`~/.dtx/keys/` 配下の鍵を自身の責任でバックアップする。
+Users should back up keys under `~/.dtx/keys/` on their own responsibility if needed.
 
 ---
 
-### 3. シェル統合
+### 3. Shell Integration
 
-シェル統合は、通常利用時のミスを減らすための補助機能とする。環境変数の注入は引き続き `dtx run` のみに限定し、シェル統合によって現在のシェルへ秘密情報を常駐させない。
+Shell integration is an auxiliary feature to reduce mistakes during normal use. Environment-variable injection remains limited to `dtx run`, and shell integration must not keep secrets resident in the current shell.
 
-#### 補完機能
+#### Completion
 
-対象シェル：
+Target shells:
 
 * zsh
 * bash
 * fish
 
-補完対象：
+Completion targets:
 
-* サブコマンド
-* env名
-* `run` のオプション
+* subcommands
+* env names
+* `run` options
 
-例：
+Examples:
 
 ```bash
 dtx use <TAB>
 dtx run <TAB>
 ```
 
-env名補完は `~/.dtx/envs/` の一覧を元に生成する。
+Generate env-name completion from the contents of `~/.dtx/envs/`.
 
-#### プロンプト表示
+#### Prompt Display
 
-現在選択中のenvをプロンプトに表示できるようにする。
+Allow the currently selected env to be shown in the prompt.
 
-例：
+Example:
 
 ```text
 [dtx:dev] ~/app %
 ```
 
-表示対象は `current` に保存されたenv名のみとする。秘密情報やenvの中身は一切読み込まない。
+Only the env name stored in `current` is shown. Secret data and env contents are never read.
 
-#### シェルフック
+#### Shell Hooks
 
-シェルフックは以下の目的に限定する。
+Limit shell hooks to the following purposes:
 
-* プロンプト描画のたびに現在env名を取得する
-* 補完関数を読み込む
+* Read the current env name when the prompt is rendered.
+* Load completion functions.
 
-禁止事項：
+Prohibited behavior:
 
-* シェル起動時にenvファイルを復号しない
-* `export` によって秘密情報をシェルへ常駐させない
-* ディレクトリ移動だけでenvを自動注入しない
+* Do not decrypt env files when the shell starts.
+* Do not keep secrets resident in the shell through `export`.
+* Do not inject envs automatically just because the current directory changed.
 
-#### セットアップコマンド
+#### Setup Commands
 
-将来的に以下のコマンドを追加する。
+The following commands may be added in the future:
 
 ```bash
 dtx init shell
 dtx init completion
 ```
 
-出力例：
+Example output:
 
 ```bash
 eval "$(dtx init shell)"
 ```
 
-シェル設定ファイルへの自動追記は行わず、ユーザーが明示的に追加する形式を基本とする。
+Do not automatically append anything to shell configuration files. The default model is that users add it explicitly.
 
-#### 決定事項
+#### Decisions
 
-* プロンプト表示では、描画のたびに `~/.dtx/current` を直接読み取る
-* キャッシュはMVPでは実装しない
-* `current` が存在しない場合は何も表示しない
-* `current` の読み取りに失敗した場合も、プロンプト表示を失敗させず非表示にする
-* プロンプト表示はdtx本体で提供しない
-* プロンプト表示はサンプルスクリプトに留める
-* プロジェクトディレクトリごとのcurrentはサポートしない
-* `direnv` のような自動切り替えはサポート対象外とする
+* For prompt display, read `~/.dtx/current` directly on each render.
+* Do not implement caching in the MVP.
+* If `current` does not exist, show nothing.
+* If reading `current` fails, do not fail prompt rendering; just hide the display.
+* Do not provide prompt display from dtx itself.
+* Keep prompt display as a sample script only.
+* Do not support per-project `current`.
+* Automatic switching like `direnv` is out of scope.

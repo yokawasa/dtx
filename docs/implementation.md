@@ -1,53 +1,53 @@
-# dtx 実装メモ
+# dtx Implementation Notes
 
-このドキュメントは `docs/design.md` を実装へ落とすための前提、MVPスコープ、実装方針を整理する。
+This document organizes the assumptions, MVP scope, and implementation policy used to turn `docs/design.md` into code.
 
-## 1. 実装方針
+## 1. Implementation Policy
 
-### 1.1 実装言語
+### 1.1 Implementation Language
 
-MVPは Go で実装する。
+The MVP is implemented in Go.
 
-理由：
+Reasons:
 
-* CLIツールとして単一バイナリ配布しやすい
-* ファイル権限、プロセス実行、終了コード処理を扱いやすい
-* ユーザー環境にNode.jsランタイムを要求しなくてよい
-* `~/.dtx` 配下のローカル状態管理と相性がよい
-* テスト時に一時ディレクトリを使ったCLI検証がしやすい
+* It is easy to distribute as a single-binary CLI tool.
+* It handles file permissions, process execution, and exit-code handling well.
+* It does not require a Node.js runtime in the user's environment.
+* It fits local state management under `~/.dtx`.
+* It is easy to test CLI behavior using temporary directories.
 
-注意点：
+Notes:
 
-* dotenvxの暗号化・復号仕様はGoで再実装しない
-* dotenvxは必須外部CLI依存とする
-* dtx本体はGoで実装し、dotenvx CLI呼び出しはadapter層に閉じ込める
+* Do not reimplement dotenvx encryption and decryption behavior in Go.
+* Treat dotenvx as a required external CLI dependency.
+* Implement dtx itself in Go, and keep dotenvx CLI calls inside an adapter layer.
 
-### 1.2 dotenvx連携
+### 1.2 dotenvx Integration
 
-Go実装では、dotenvxのライブラリAPIではなくdotenvx CLIをサブプロセスとして利用する。
+In the Go implementation, use the dotenvx CLI as a subprocess rather than using a dotenvx library API.
 
-方針：
+Policy:
 
-* dotenvx CLIは必須依存とする
-* 起動時またはdotenvx利用コマンド実行時に `dotenvx` の存在を検証する
-* dtx本体から直接dotenvxコマンドを散らさず、`internal/dotenvx` adapterに閉じ込める
-* 将来、Goネイティブ実装や別の暗号バックエンドへ差し替えられる構造にする
+* The dotenvx CLI is a required dependency.
+* Verify the presence of `dotenvx` at startup or before running commands that use it.
+* Do not scatter direct dotenvx command calls throughout dtx. Keep them inside the `internal/dotenvx` adapter.
+* Preserve a structure that can later be replaced with a Go-native implementation or another encryption backend.
 
-### 1.3 Go module
+### 1.3 Go Module
 
-MVPではGo moduleを前提にする。
+The MVP assumes a Go module.
 
-想定：
+Expected initialization:
 
 ```bash
 go mod init github.com/yokawasa/dtx
 ```
 
-CLIのエントリポイントは `cmd/dtx/main.go` とする。
+The CLI entry point is `cmd/dtx/main.go`.
 
-## 2. MVPスコープ
+## 2. MVP Scope
 
-MVPで実装するコマンド：
+Commands included in the MVP:
 
 ```bash
 dtx use <env>
@@ -57,133 +57,133 @@ dtx run [env] [--verbose] -- <command>
 dtx edit <env>
 ```
 
-MVPで実装しないもの：
+Out of scope for the MVP:
 
-* 鍵ローテーション
-* CI向けの秘密鍵環境変数注入
-* OSキーチェーン連携
-* パスフレーズ方式
-* プロジェクトディレクトリごとのcurrent
-* direnvのような自動切り替え
-* プロンプト表示の本体実装
+* Key rotation
+* Secret key injection via environment variables for CI
+* OS keychain integration
+* Passphrase-based mode
+* Per-project `current`
+* Automatic switching like `direnv`
+* Built-in prompt rendering
 * `dtx doctor`
 * `dtx init shell`
 * `dtx init completion`
 
-## 3. 実装前提
+## 3. Implementation Assumptions
 
-### 3.1 `dtx edit <env>` は新規env作成も兼ねる
+### 3.1 `dtx edit <env>` Also Creates a New env
 
-設計上、env作成専用コマンドは定義されていない。
+The design does not define a dedicated command for env creation.
 
-MVPでは以下とする。
+For the MVP:
 
-* `dtx edit <env>` は、対象envが存在しない場合に新規作成する
-* 新規作成時はenvごとの鍵も同時に作成する
-* 既存envの場合は既存鍵を再利用する
+* `dtx edit <env>` creates a new env when the target env does not exist.
+* When creating a new env, create an env-specific key at the same time.
+* When the env already exists, reuse the existing key.
 
-理由：
+Reasons:
 
-* コマンドセットを増やさずにenv作成フローを完結できる
-* `edit` の直感に合う
+* The env creation flow can be completed without adding another command.
+* This matches the intuition behind `edit`.
 
-### 3.2 `dtx doctor` はMVP対象外
+### 3.2 `dtx doctor` Is Out of Scope for the MVP
 
-`docs/design.md` では鍵権限チェックの文脈で `dtx doctor` が言及されているが、CLI仕様のコマンド一覧には含まれていない。
+`docs/design.md` mentions `dtx doctor` in the context of checking key permissions, but it is not included in the CLI command list.
 
-MVPでは以下とする。
+For the MVP:
 
-* `dtx doctor` は実装しない
-* 権限チェックは各コマンド実行時に必要最小限で行う
-* `doctor` は将来の診断コマンドとして別途追加する
+* Do not implement `dtx doctor`.
+* Perform only the minimum necessary permission checks when each command runs.
+* Add `doctor` later as a separate diagnostic command.
 
-### 3.3 シェル統合コマンドはMVP対象外
+### 3.3 Shell Integration Commands Are Out of Scope for the MVP
 
-`dtx init shell` / `dtx init completion` は将来の追加事項とする。
+`dtx init shell` and `dtx init completion` are future additions.
 
-MVPでは以下とする。
+For the MVP:
 
-* 補完やプロンプト表示はサンプルスクリプトに留める
-* dtx本体にはシェル統合コマンドを実装しない
+* Keep completion and prompt display as sample scripts only.
+* Do not implement shell integration commands in dtx itself.
 
-### 3.4 dotenvx CLI adapter
+### 3.4 dotenvx CLI Adapter
 
-adapterは、dtx本体とdotenvx CLIの境界を担当する。
+The adapter owns the boundary between dtx and the dotenvx CLI.
 
-責務：
+Responsibilities:
 
-* `dotenvx` コマンドの存在確認
-* envファイルパスと鍵の受け渡し
-* `run` / `encrypt` / `decrypt` 相当の呼び出し
-* `--quiet` / `--verbose` 相当の出力制御
-* dotenvx由来のエラーをdtx向けのエラーへ変換
+* Check for the existence of the `dotenvx` command.
+* Pass env file paths and keys.
+* Handle calls equivalent to `run` / `encrypt` / `decrypt`.
+* Control output equivalent to `--quiet` / `--verbose`.
+* Convert dotenvx-originated errors into dtx-oriented errors.
 
-実装時に確認すること：
+Things to confirm during implementation:
 
-* dtxの `~/.dtx/keys/<env>` をdotenvx CLIへ渡す方法
-* 一時的な `.env.keys` ファイルを作る必要があるか
-* `decrypt --stdout` / `encrypt --stdout` を使えるか
-* `dotenvx run` で対象コマンドの標準出力を維持したままdotenvxログだけ抑制できるか
-* dotenvx CLIの終了コードとエラーメッセージの扱い
+* How to pass `~/.dtx/keys/<env>` to the dotenvx CLI
+* Whether a temporary `.env.keys` file is required
+* Whether `decrypt --stdout` / `encrypt --stdout` can be used
+* Whether `dotenvx run` can suppress dotenvx logs while preserving the target command's stdout
+* How to handle dotenvx CLI exit codes and error messages
 
-重要な制約：
+Important constraints:
 
-* dtx本体はdotenvxの暗号形式を解釈しない
-* dotenvx CLI呼び出しの詳細はadapter外へ漏らさない
+* dtx itself must not interpret the dotenvx encryption format.
+* Details of dotenvx CLI invocation must not leak outside the adapter.
 
-### 3.5 `--verbose` の位置
+### 3.5 Position of `--verbose`
 
-MVPでは、dtxのオプションは `--` より前だけで解釈する。
+For the MVP, dtx options are interpreted only before `--`.
 
 ```bash
 dtx run --verbose -- npm start
 dtx run prod --verbose -- npm start
 ```
 
-`--` 以降は実行対象コマンドにそのまま渡す。
+Everything after `--` is passed through to the target command as-is.
 
-### 3.6 危険envの確認
+### 3.6 Confirmation for Dangerous envs
 
-設計ではprodなどの危険envで確認可能とされているが、具体ルールは未定義。
+The design says confirmation should be possible for dangerous envs such as `prod`, but the concrete rules are undefined.
 
-MVPでは以下とする。
+For the MVP:
 
-* 確認プロンプトは実装しない
-* `Using env: prod` の表示のみ行う
-* 将来 `confirm` や `protected env` の設定を追加する
+* Do not implement an interactive confirmation prompt.
+* Only print `Using env: prod`.
+* Add future support for settings such as `confirm` or `protected env`.
 
-### 3.7 エディタ選択
+### 3.7 Editor Selection
 
-MVPでは以下とする。
+For the MVP:
 
-* `$VISUAL` を優先
-* 次に `$EDITOR`
-* どちらも未設定ならエラーにする
+* Prefer `$VISUAL`.
+* Then use `$EDITOR`.
+* Return an error if neither is set.
 
-理由：
+Reasons:
 
-* 暗黙に `vi` などを起動すると環境によって体験がぶれる
-* ユーザーに明示的なエディタ設定を促せる
+* Implicitly launching `vi` or something similar makes the experience vary by environment.
+* This pushes users toward explicit editor configuration.
 
-### 3.8 テスト用のhome切り替え
+### 3.8 Switching Home for Tests
 
-MVPでは `DTX_HOME` をサポートする。
+The MVP supports `DTX_HOME`.
 
-* 通常は `~/.dtx` を使う
-* `DTX_HOME` が設定されている場合は、そのディレクトリをdtx homeとして使う
+* Use `~/.dtx` by default.
+* If `DTX_HOME` is set, use that directory as the dtx home.
 
-例：
+Example:
 
 ```bash
 DTX_HOME=/tmp/dtx-test dtx ls
 ```
 
-理由：
+Reasons:
 
-* 実ユーザーの `~/.dtx` を汚さずテストできる
-* E2Eテストが書きやすい
+* Tests can run without polluting the real user's `~/.dtx`.
+* It makes E2E tests easier to write.
 
-## 4. ファイル構成案
+## 4. Proposed File Layout
 
 ```text
 go.mod
@@ -219,32 +219,32 @@ internal/
 testdata/
 ```
 
-## 5. 実装順序
+## 5. Implementation Order
 
-1. Go moduleとCLIエントリポイントを作成
-2. `DTX_HOME` 対応を含むpath管理を実装
-3. env名バリデーションと権限設定を実装
-4. `use` / `current` / `ls` を実装
-5. dotenvx CLI adapterを実装
-6. `edit` を実装
-7. `run` を実装
-8. エラー整形と出力制御を追加
-9. READMEに最小利用例を追加
-10. コマンド単位のテストを追加
+1. Create the Go module and CLI entry point.
+2. Implement path management including `DTX_HOME` support.
+3. Implement env-name validation and permission handling.
+4. Implement `use` / `current` / `ls`.
+5. Implement the dotenvx CLI adapter.
+6. Implement `edit`.
+7. Implement `run`.
+8. Add error formatting and output control.
+9. Add a minimal usage example to the README.
+10. Add command-level tests.
 
-## 6. 現時点の決定
+## 6. Current Decisions
 
-実装を前に進めるため、以下をMVPの前提として採用する。
+To keep implementation moving, the following are adopted as MVP assumptions.
 
-* Goで実装する
-* Go moduleを使う
-* dotenvxは必須外部CLI依存とする
-* dotenvx CLI呼び出しはadapter層に閉じ込める
-* `edit` は既存env編集と新規env作成を兼ねる
-* `doctor` はMVPでは実装しない
-* `init shell` / `init completion` はMVPでは実装しない
-* `run` はGoのプロセス実行機能でdotenvx CLIを起動し、終了コードを伝播する
-* `--verbose` は `--` より前でのみ解釈する
-* 危険envの確認プロンプトはMVPでは実装しない
-* エディタは `$VISUAL` / `$EDITOR` のみ使い、未設定ならエラーにする
-* テスト用に `DTX_HOME` をサポートする
+* Implement dtx in Go.
+* Use a Go module.
+* Treat dotenvx as a required external CLI dependency.
+* Keep dotenvx CLI calls inside an adapter layer.
+* Let `edit` handle both editing an existing env and creating a new one.
+* Do not implement `doctor` in the MVP.
+* Do not implement `init shell` / `init completion` in the MVP.
+* `run` launches the dotenvx CLI using Go process execution and propagates the exit code.
+* Interpret `--verbose` only before `--`.
+* Do not implement confirmation prompts for dangerous envs in the MVP.
+* Use only `$VISUAL` / `$EDITOR` for editor selection, and return an error if neither is set.
+* Support `DTX_HOME` for testing.

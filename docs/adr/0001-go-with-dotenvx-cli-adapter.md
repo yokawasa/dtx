@@ -1,4 +1,4 @@
-# ADR 0001: Go + dotenvx CLI adapterで実装する
+# ADR 0001: Implement with Go and a dotenvx CLI Adapter
 
 ## Status
 
@@ -6,85 +6,85 @@ Accepted
 
 ## Context
 
-dtxは、ローカル環境における環境変数を安全に管理し、選択したenvを `dtx run` 経由で明示的に利用するためのCLIツールである。
+dtx is a CLI tool for safely managing environment variables in a local environment and for explicitly using the selected env through `dtx run`.
 
-設計上、dtxの主な責務は以下である。
+By design, the primary responsibilities of dtx are:
 
-* envの選択状態を管理する
-* 暗号化されたenvファイルと鍵を `~/.dtx` 配下で管理する
-* 誤った環境での実行を防ぐため、実行経路を `dtx run` に限定する
-* 暗号化・復号の仕様はdotenvxに委ねる
+* Manage the selected env state.
+* Manage encrypted env files and keys under `~/.dtx`.
+* Restrict the execution path to `dtx run` to prevent running commands in the wrong environment.
+* Delegate encryption and decryption behavior to dotenvx.
 
-当初は、dotenvxのライブラリAPIを利用する前提でNode.js + TypeScript実装を検討していた。しかし、CLIツールとしての配布性、単一バイナリ化、プロセス実行やファイル権限の扱いやすさを考えると、dtx本体はGoで実装する方が適している。
+At first, a Node.js + TypeScript implementation using the dotenvx library API was considered. However, for a CLI tool, Go is a better fit for distribution, single-binary delivery, and straightforward handling of process execution and file permissions.
 
-一方で、dotenvxはNode.jsエコシステムのツールであり、GoからdotenvxのライブラリAPIを直接利用するのは自然ではない。また、dotenvx互換の暗号化・復号処理をGoで再実装すると、dtxが本来持つべきでない暗号仕様への追従責務を負うことになる。
+At the same time, dotenvx is a tool in the Node.js ecosystem, so calling its library API directly from Go is not a natural fit. Reimplementing dotenvx-compatible encryption and decryption in Go would also force dtx to track an encryption format that is outside its intended scope.
 
 ## Decision
 
-dtx本体はGoで実装する。
+Implement dtx itself in Go.
 
-暗号化・復号・実行時注入はGoで再実装せず、dotenvx CLIをサブプロセスとして利用する。
+Do not reimplement encryption, decryption, or runtime injection in Go. Use the dotenvx CLI as a subprocess instead.
 
-dotenvx CLI呼び出しは、dtx本体の各コマンドに直接散らさず、adapter層に閉じ込める。
+Do not scatter dotenvx CLI calls directly throughout dtx commands. Keep them inside an adapter layer.
 
-具体的には以下を採用する。
+Specifically, adopt the following:
 
-* Go moduleとして実装する
-* CLIエントリポイントは `cmd/dtx/main.go` とする
-* dotenvx CLIは必須外部依存とする
-* `internal/dotenvx` にadapterを置く
-* adapterが `run` / `encrypt` / `decrypt` 相当のdotenvx CLI呼び出しを担当する
-* dtx本体はdotenvxの暗号形式を解釈しない
-* dtx本体はenv選択、path解決、鍵管理、権限設定、出力制御、エラー整形を担当する
+* Implement dtx as a Go module.
+* Use `cmd/dtx/main.go` as the CLI entry point.
+* Treat the dotenvx CLI as a required external dependency.
+* Place the adapter under `internal/dotenvx`.
+* Let the adapter handle dotenvx CLI calls equivalent to `run` / `encrypt` / `decrypt`.
+* Do not let dtx itself interpret the dotenvx encryption format.
+* Keep dtx responsible for env selection, path resolution, key management, permission handling, output control, and error formatting.
 
 ## Consequences
 
 ### Positive
 
-* dtxを単一バイナリとして配布しやすい
-* ユーザー環境にNode.jsランタイムを要求しない
-* Goの標準機能でファイル権限、プロセス実行、終了コード伝播を扱いやすい
-* dtxの責務をenv管理と実行ゲートに集中できる
-* dotenvxの暗号仕様をdtx側で再実装せずに済む
-* 将来、dotenvx CLI以外の実装へ差し替える場合もadapter層を境界にできる
+* dtx is easy to distribute as a single binary.
+* Users do not need a Node.js runtime.
+* Go's standard capabilities are well suited to file permissions, process execution, and exit-code propagation.
+* dtx can stay focused on env management and the execution gate.
+* dtx does not need to reimplement dotenvx encryption behavior.
+* If the implementation is replaced later, the adapter layer provides a clean boundary.
 
 ### Negative
 
-* dotenvx CLIが実行環境にインストールされている必要がある
-* dotenvx CLIの仕様変更や出力変更の影響を受ける
-* サブプロセス呼び出しのため、ライブラリAPI利用よりも制御できる範囲が狭い
-* dotenvx由来の標準出力と実行対象コマンドの標準出力を分離する設計に注意が必要
+* The dotenvx CLI must be installed in the runtime environment.
+* Changes to dotenvx CLI behavior or output can affect dtx.
+* A subprocess-based integration gives less control than a library API.
+* The design must carefully separate dotenvx-originated stdout from the target command's stdout.
 
 ### Neutral / Mitigation
 
-* dotenvx CLIの存在確認を、dotenvx利用コマンドの実行前に行う
-* dotenvx CLI呼び出しはadapter層に閉じ込め、仕様変更の影響範囲を限定する
-* `--verbose` 指定時のみdotenvx由来の詳細出力を表示する
-* 通常時は `--quiet` 相当の出力抑制を行う
-* dtxのエラーメッセージはdotenvxの生エラーをそのまま出さず、dtxの文脈で整形する
+* Check for the existence of the dotenvx CLI before executing commands that require it.
+* Keep dotenvx CLI calls inside the adapter layer so the impact of specification changes stays localized.
+* Show detailed dotenvx output only when `--verbose` is specified.
+* Suppress output in normal operation using behavior equivalent to `--quiet`.
+* Format dtx error messages in dtx terms instead of exposing raw dotenvx errors directly.
 
 ## Alternatives Considered
 
 ### Node.js + TypeScript + dotenvx library API
 
-dotenvxとの統合は自然だが、dtx本体をNode.jsランタイム前提にする必要がある。
+This is a natural integration with dotenvx, but it would require the dtx runtime to depend on Node.js.
 
-CLI配布、単一バイナリ化、ファイル権限やプロセス制御の扱いやすさではGo実装の方が適しているため採用しない。
+It is not chosen because Go is a better fit for CLI distribution, single-binary delivery, and file-permission and process-control handling.
 
-### Goでdotenvx互換の暗号処理を再実装する
+### Reimplement dotenvx-compatible encryption in Go
 
-外部CLI依存をなくせるが、dotenvxの暗号形式や鍵管理仕様へ追従する必要がある。
+This would remove the external CLI dependency, but it would require following dotenvx encryption and key-management behavior.
 
-dtxの本質は暗号ライブラリではなくenv管理と実行ゲートであるため、MVPでは採用しない。
+That is not the core purpose of dtx, which is env management and an execution gate, so it is not chosen for the MVP.
 
-### Go + dotenvx CLIを各コマンドから直接呼び出す
+### Call the dotenvx CLI Directly from Each Command in Go
 
-実装は短くなるが、dotenvx CLI依存がコード全体に広がる。
+This would shorten the implementation, but it would spread the dotenvx CLI dependency across the codebase.
 
-将来の差し替えやテストが難しくなるため、adapter層に閉じ込める方針を採用する。
+That would make future replacement and testing harder, so the chosen approach keeps it inside an adapter layer.
 
 ## Follow-ups
 
-* dotenvx CLIへ `~/.dtx/keys/<env>` の秘密鍵を渡す具体方式を実装時に確定する
-* `dotenvx run` のquiet/verbose挙動を実測し、dtxの出力制御仕様に反映する
-* adapter層のテストでは、実dotenvx CLIを使うテストとfake adapterを使うテストを分ける
+* Finalize the concrete way to pass the private key at `~/.dtx/keys/<env>` to the dotenvx CLI during implementation.
+* Measure the quiet/verbose behavior of `dotenvx run` and reflect it in the dtx output-control specification.
+* Separate adapter tests that use the real dotenvx CLI from tests that use a fake adapter.

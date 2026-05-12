@@ -1,31 +1,31 @@
-# dtx 開発者向けマニュアル
+# dtx Developer Manual
 
-このドキュメントは、dtx本体を開発・テストする内部開発者向けの手順をまとめる。
+This document summarizes the procedures for developers who work on and test dtx itself.
 
-利用者向けのインストール・基本利用手順は `README.md` を参照する。
+For installation and basic usage instructions for end users, see `README.md`.
 
-## 前提
+## Prerequisites
 
-### 必須
+### Required
 
-* Go 1.21 以上
+* Go 1.21 or later
 * dotenvx CLI
 
-dotenvx CLIの存在確認：
+Check whether the dotenvx CLI is installed:
 
 ```bash
 command -v dotenvx
 ```
 
-未インストールの場合：
+If it is not installed:
 
 ```bash
 npm install -g @dotenvx/dotenvx
 ```
 
-## 基本の開発ループ
+## Basic Development Loop
 
-通常の変更後は、以下の順で確認する。
+After a normal change, verify it in the following order.
 
 ```bash
 gofmt -w cmd internal
@@ -33,60 +33,60 @@ go test ./...
 go build -o /private/tmp/dtx ./cmd/dtx
 ```
 
-注意：
+Notes:
 
-* ルートディレクトリに `dtx` バイナリを生成しない
-* ビルド成果物は `/private/tmp/dtx` や `/tmp/dtx` へ出力する
-* 実ユーザーの `~/.dtx` を汚さないため、手動確認では `DTX_HOME` を使う
+* Do not generate the `dtx` binary in the repository root.
+* Write build artifacts to `/private/tmp/dtx` or `/tmp/dtx`.
+* Use `DTX_HOME` for manual checks so you do not pollute the real user's `~/.dtx`.
 
-## テスト
+## Testing
 
-全テストを実行する。
+Run all tests.
 
 ```bash
 go test ./...
 ```
 
-特定パッケージだけ実行する。
+Run only a specific package.
 
 ```bash
 go test ./internal/cli
 go test ./internal/core
 ```
 
-詳細ログを出す。
+Show verbose logs.
 
 ```bash
 go test -v ./...
 ```
 
-## ビルド
+## Build
 
-開発確認用のバイナリを作成する。
+Build a binary for development verification.
 
 ```bash
 go build -o /private/tmp/dtx ./cmd/dtx
 ```
 
-バージョン・ヘルプの簡易確認：
+Quick version and help checks:
 
 ```bash
 /private/tmp/dtx --help
 /private/tmp/dtx --version
 ```
 
-## 隔離された手動確認
+## Isolated Manual Verification
 
-`DTX_HOME` を一時ディレクトリへ向けることで、実ユーザーの `~/.dtx` を変更せずに確認できる。
+Point `DTX_HOME` at a temporary directory so you can verify behavior without modifying the real user's `~/.dtx`.
 
 ```bash
 tmp_home=$(mktemp -d /private/tmp/dtx-home.XXXXXX)
 DTX_HOME="$tmp_home" /private/tmp/dtx ls
 ```
 
-## 実dotenvx込みのE2E確認
+## End-to-End Verification with Real dotenvx
 
-`edit` から `run` までを、実際のdotenvx CLIを使って確認する。
+Verify the flow from `edit` through `run` using the real dotenvx CLI.
 
 ```bash
 go build -o /private/tmp/dtx ./cmd/dtx
@@ -107,7 +107,7 @@ DTX_HOME="$tmp_home" /private/tmp/dtx current
 DTX_HOME="$tmp_home" /private/tmp/dtx run dev -- sh -c 'printf "$HELLO\n"'
 ```
 
-期待される出力：
+Expected output:
 
 ```text
 Edited env: dev
@@ -118,61 +118,61 @@ Using env: dev
 dev
 ```
 
-## ディレクトリ構造
+## Directory Layout
 
-主要な実装箇所：
+Primary implementation locations:
 
 ```text
-cmd/dtx/main.go        CLIエントリポイント
-internal/cli/          引数解析とコマンド振り分け
-internal/command/      dtx各コマンドの実装
-internal/core/         path、env名、権限、env store
+cmd/dtx/main.go        CLI entry point
+internal/cli/          Argument parsing and command dispatch
+internal/command/      Implementation of each dtx command
+internal/core/         Paths, env names, permissions, env store
 internal/dotenvx/      dotenvx CLI adapter
-internal/process/      サブプロセス実行
-internal/apperr/       終了コードとエラー整形
+internal/process/      Subprocess execution
+internal/apperr/       Exit codes and error formatting
 ```
 
-## dotenvx連携の確認ポイント
+## dotenvx Integration Checkpoints
 
-dotenvx CLI呼び出しは `internal/dotenvx` に閉じ込める。
+Keep dotenvx CLI calls encapsulated inside `internal/dotenvx`.
 
-確認する観点：
+Things to verify:
 
-* dtx本体がdotenvxの暗号形式を解釈していないこと
-* `run` / `encrypt` / `decrypt` 相当の呼び出しがadapter経由であること
-* 通常時は `--quiet` を使い、`--verbose` 指定時のみ詳細出力を許可すること
-* envファイルは `envs/<env>.enc`、鍵ファイルは `keys/<env>` に保存されること
+* dtx itself must not interpret the dotenvx encryption format.
+* Calls equivalent to `run` / `encrypt` / `decrypt` must go through the adapter.
+* Use `--quiet` by default, and allow detailed output only with `--verbose`.
+* Store env files in `envs/<env>.enc` and key files in `keys/<env>`.
 
-## 権限確認
+## Permission Checks
 
-手動確認後、必要に応じてファイル権限を確認する。
+After manual verification, check file permissions if needed.
 
 ```bash
 find "$tmp_home" -maxdepth 2 -type d -exec ls -ld {} \;
 find "$tmp_home" -maxdepth 2 -type f -exec ls -l {} \;
 ```
 
-期待値：
+Expected values:
 
-* dtx home、`envs/`、`keys/` は `700`
-* `current`、envファイル、鍵ファイルは `600`
+* dtx home, `envs/`, and `keys/` should be `700`.
+* `current`, env files, and key files should be `600`.
 
-## よく使う確認コマンド
+## Frequently Used Verification Commands
 
-現在の差分：
+Current diff:
 
 ```bash
 git status --short
 git diff
 ```
 
-Goファイル一覧：
+List Go files:
 
 ```bash
 find cmd internal -type f | sort
 ```
 
-dotenvxのCLI仕様確認：
+Check the dotenvx CLI specification:
 
 ```bash
 dotenvx run --help
@@ -180,66 +180,66 @@ dotenvx encrypt --help
 dotenvx decrypt --help
 ```
 
-## リリース
+## Release
 
-リリースは GitHub Actions + GoReleaser で自動化されている。バージョンタグを push するだけで完結する。
+Releases are automated through GitHub Actions + GoReleaser. Pushing a version tag is enough.
 
-### リリース手順
+### Release Procedure
 
 ```bash
-# 1. main が最新の状態であることを確認
+# 1. Confirm that main is up to date
 git checkout main
 git pull
 
-# 2. 全テストが通ることを確認
+# 2. Confirm that all tests pass
 go test ./...
 
-# 3. バージョンタグを付けて push（これだけで自動リリースが走る）
+# 3. Tag the version and push it (this alone triggers the automated release)
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-タグ push 後、`.github/workflows/release.yml` が起動し、GitHub Release に以下が自動生成される。
+After the tag is pushed, `.github/workflows/release.yml` runs and automatically creates the following assets in the GitHub Release.
 
-| 成果物 | 内容 |
+| Artifact | Contents |
 |---|---|
-| `dtx_linux_amd64.tar.gz` | Linux (x86_64) バイナリ |
-| `dtx_linux_arm64.tar.gz` | Linux (ARM64) バイナリ |
-| `dtx_darwin_amd64.tar.gz` | macOS (Intel) バイナリ |
-| `dtx_darwin_arm64.tar.gz` | macOS (Apple Silicon) バイナリ |
-| `dtx_windows_amd64.zip` | Windows (x86_64) バイナリ |
-| `checksums.txt` | 各アーカイブの SHA-256 チェックサム |
+| `dtx_linux_amd64.tar.gz` | Linux (x86_64) binary |
+| `dtx_linux_arm64.tar.gz` | Linux (ARM64) binary |
+| `dtx_darwin_amd64.tar.gz` | macOS (Intel) binary |
+| `dtx_darwin_arm64.tar.gz` | macOS (Apple Silicon) binary |
+| `dtx_windows_amd64.zip` | Windows (x86_64) binary |
+| `checksums.txt` | SHA-256 checksums for each archive |
 
-### バージョン番号のルール
+### Versioning Rules
 
-[Semantic Versioning](https://semver.org/) に従う。
+Follow [Semantic Versioning](https://semver.org/).
 
-* `v1.2.3` — 正式リリース（GitHub Release として公開）
-* `v1.2.3-beta.1` などサフィックスあり → pre-release として自動分類される
+* `v1.2.3` - official release published as a GitHub Release
+* A suffix such as `v1.2.3-beta.1` -> automatically classified as a pre-release
 
-### バージョン文字列の確認
+### Checking the Version String
 
-リリースバイナリには `ldflags` でバージョンが埋め込まれる。
+The release binary embeds the version using `ldflags`.
 
 ```bash
-dtx --version  # → dtx v0.1.0
+dtx --version  # -> dtx v0.1.0
 ```
 
-開発ビルド（`go build` のまま）では `dtx dev` と表示される。
+A development build created with plain `go build` shows `dtx dev`.
 
-### ローカルでのリリースビルド確認
+### Verifying a Release Build Locally
 
-GoReleaser をインストール済みの場合、ローカルで成果物を確認できる（GitHub へは publish しない）。
+If GoReleaser is installed, you can verify the artifacts locally without publishing to GitHub.
 
 ```bash
 goreleaser release --snapshot --clean
-# dist/ ディレクトリに各プラットフォームのバイナリが生成される
+# Binaries for each platform are generated in the dist/ directory
 ```
 
-## 注意事項
+## Notes
 
-* `dtx edit` は `$VISUAL`、次に `$EDITOR` を使う
-* どちらも未設定の場合、`dtx edit` はエラーにする
-* `dtx run` のdtx側オプションは `--` より前だけで解釈する
-* `--` 以降は実行対象コマンドへそのまま渡す
-* `dtx doctor`、シェル統合、鍵ローテーションはMVP対象外
+* `dtx edit` uses `$VISUAL` first, then `$EDITOR`.
+* If neither is set, `dtx edit` must return an error.
+* `dtx run` only interprets dtx-side options before `--`.
+* Everything after `--` is passed through to the target command as-is.
+* `dtx doctor`, shell integration, and key rotation are out of scope for the MVP.
