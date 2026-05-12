@@ -83,8 +83,14 @@ func TestRunUsesFakeDotenvxAndPropagatesExitCode(t *testing.T) {
 	}
 
 	err = Run([]string{"run", "dev", "--", "sh", "-c", "exit 7"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "command failed") {
-		t.Fatalf("expected command failure, got %v", err)
+	if err == nil {
+		t.Fatal("expected command failure, got nil")
+	}
+	if !apperr.IsSilent(err) {
+		t.Fatalf("expected silent error, got %v", err)
+	}
+	if got := apperr.ExitCode(err); got != 7 {
+		t.Fatalf("exit code = %d, want 7", got)
 	}
 }
 
@@ -194,6 +200,58 @@ func TestEditUsesTemporaryKeyUnderDtxHome(t *testing.T) {
 	}
 	if got == filepath.Join(home, "keys", "dev") {
 		t.Fatalf("encrypt used target key path directly: %q", got)
+	}
+}
+
+func TestUseMissingEnvReturnsError(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("DTX_HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, "envs"), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Run([]string{"use", "missing"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), `"missing" does not exist`) {
+		t.Fatalf("expected 'does not exist' error, got %v", err)
+	}
+}
+
+func TestCurrentWithNoCurrentFileReturnsNotSet(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("DTX_HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, "envs"), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Run([]string{"current"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "current env is not set") {
+		t.Fatalf("expected 'current env is not set' error, got %v", err)
+	}
+}
+
+func TestInvalidEnvNamesAreRejected(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("DTX_HOME", home)
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"use ../etc", []string{"use", "../etc"}},
+		{"use prod/key", []string{"use", "prod/key"}},
+		{"run ../etc", []string{"run", "../etc", "--", "sh", "-c", "true"}},
+		{"run prod/key", []string{"run", "prod/key", "--", "sh", "-c", "true"}},
+		{"edit ../etc", []string{"edit", "../etc"}},
+		{"edit prod/key", []string{"edit", "prod/key"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Run(tc.args, nil, &bytes.Buffer{}, &bytes.Buffer{})
+			if err == nil || !strings.Contains(err.Error(), "invalid env name") {
+				t.Fatalf("expected 'invalid env name' error, got %v", err)
+			}
+		})
 	}
 }
 
