@@ -59,6 +59,19 @@ func parseEditArgs(args []string) (string, bool, error) {
 	return env, verbose, nil
 }
 
+func parseCompletionArgs(args []string) (string, error) {
+	if len(args) != 1 {
+		return "", newUsageError("usage: dtx completion <bash|zsh|fish>")
+	}
+
+	switch args[0] {
+	case "bash", "zsh", "fish":
+		return args[0], nil
+	default:
+		return "", newUsageError("usage: dtx completion <bash|zsh|fish>")
+	}
+}
+
 type usageError string
 
 func (e usageError) Error() string {

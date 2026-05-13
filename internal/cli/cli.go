@@ -15,6 +15,7 @@ const usage = `Usage:
   dtx ls
   dtx run [env] [--verbose] -- <command>
   dtx edit <env> [--verbose]
+  dtx completion <bash|zsh|fish>
 `
 
 func Run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
@@ -70,6 +71,16 @@ func Run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 			return err
 		}
 		return command.Edit(ctx, env, verbose)
+	case "completion":
+		shell, err := parseCompletionArgs(args[1:])
+		if err != nil {
+			if isUsageError(err) {
+				return printUsageError(stderr, err.Error())
+			}
+			return err
+		}
+		_, err = io.WriteString(stdout, completionScript(shell))
+		return err
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}

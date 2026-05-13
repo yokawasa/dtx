@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -291,6 +292,11 @@ func TestUsageErrorsPrintPlainUsageAndExitSilently(t *testing.T) {
 			args:       []string{"edit", "dev", "prod"},
 			wantStderr: "usage: dtx edit <env> [--verbose]\n",
 		},
+		{
+			name:       "completion args",
+			args:       []string{"completion"},
+			wantStderr: "usage: dtx completion <bash|zsh|fish>\n",
+		},
 	}
 
 	for _, tt := range tests {
@@ -316,6 +322,156 @@ func TestUsageErrorsPrintPlainUsageAndExitSilently(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCompletionOutputsShellScript(t *testing.T) {
+	tests := []struct {
+		shell        string
+		wantContains []string
+	}{
+		{
+			shell: "bash",
+			wantContains: []string{
+				"_dtx_envs()",
+				"complete -o bashdefault -o default -F _dtx dtx",
+				"use current ls run edit completion",
+			},
+		},
+		{
+			shell: "zsh",
+			wantContains: []string{
+				"#compdef dtx",
+				"autoload -Uz compinit",
+				"_dtx_env_names()",
+				"compdef _dtx dtx",
+				"completion:generate shell completion",
+			},
+		},
+		{
+			shell: "fish",
+			wantContains: []string{
+				"function __dtx_envs",
+				"complete -c dtx -n '__fish_use_subcommand' -a 'use current ls run edit completion'",
+				"complete -c dtx -n '__fish_seen_subcommand_from run; and __dtx_run_needs_separator' -a --",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.shell, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			err := Run([]string{"completion", tt.shell}, nil, &stdout, &stderr)
+			if err != nil {
+				t.Fatalf("completion failed: %v", err)
+			}
+			if got := stderr.String(); got != "" {
+				t.Fatalf("stderr = %q", got)
+			}
+			output := stdout.String()
+			for _, want := range tt.wantContains {
+				if !strings.Contains(output, want) {
+					t.Fatalf("completion output missing %q\noutput:\n%s", want, output)
+				}
+			}
+		})
+	}
+}
+
+func TestCompletionScriptsParseInTargetShells(t *testing.T) {
+	tests := []struct {
+		shell string
+		args  []string
+	}{
+		{shell: "bash", args: []string{"-n"}},
+		{shell: "zsh", args: []string{"-n"}},
+		{shell: "fish", args: []string{"-n"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.shell, func(t *testing.T) {
+			shellPath, err := exec.LookPath(tt.shell)
+			if err != nil {
+				t.Skipf("%s not installed", tt.shell)
+			}
+
+			scriptPath := writeCompletionScript(t, tt.shell)
+			cmdArgs := append(append([]string{}, tt.args...), scriptPath)
+			cmd := exec.Command(shellPath, cmdArgs...)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("%s parse failed: %v\n%s", tt.shell, err, output)
+			}
+		})
+	}
+}
+
+func TestCompletionScriptsListEnvNames(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell completion integration tests require POSIX shells")
+	}
+
+	tests := []struct {
+		shell   string
+		command string
+	}{
+		{shell: "bash", command: `. "$1"; _dtx_envs`},
+		{shell: "zsh", command: `source "$1"; _dtx_env_names`},
+		{shell: "fish", command: `source $argv[1]; __dtx_envs`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.shell, func(t *testing.T) {
+			shellPath, err := exec.LookPath(tt.shell)
+			if err != nil {
+				t.Skipf("%s not installed", tt.shell)
+			}
+
+			home := t.TempDir()
+			envsDir := filepath.Join(home, "envs")
+			if err := os.MkdirAll(envsDir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			for _, env := range []string{"prod", "dev"} {
+				if err := os.WriteFile(filepath.Join(envsDir, env+".enc"), []byte("x"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			scriptPath := writeCompletionScript(t, tt.shell)
+			var cmd *exec.Cmd
+			switch tt.shell {
+			case "fish":
+				cmd = exec.Command(shellPath, "-c", tt.command, scriptPath)
+			default:
+				cmd = exec.Command(shellPath, "-c", tt.command, "dtx-completion-test", scriptPath)
+			}
+			cmd.Env = append(os.Environ(), "DTX_HOME="+home, "HOME="+t.TempDir())
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("%s env listing failed: %v\n%s", tt.shell, err, output)
+			}
+			if got := strings.TrimSpace(string(output)); got != "dev\nprod" {
+				t.Fatalf("%s env listing = %q, want %q", tt.shell, got, "dev\nprod")
+			}
+		})
+	}
+}
+
+func writeCompletionScript(t *testing.T, shell string) string {
+	t.Helper()
+
+	var stdout bytes.Buffer
+	if err := Run([]string{"completion", shell}, nil, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatalf("completion failed: %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "completion."+shell)
+	if err := os.WriteFile(path, stdout.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func installFakeDotenvx(t *testing.T) {

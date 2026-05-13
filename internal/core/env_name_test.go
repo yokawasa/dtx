@@ -10,7 +10,7 @@ func TestValidateEnvName(t *testing.T) {
 		}
 	}
 
-	invalid := []string{"", "../prod", "prod/key", "-prod", ".prod", ".."}
+	invalid := []string{"", "../prod", "prod/key", "my prod", "-prod", ".prod", ".."}
 	for _, env := range invalid {
 		if err := ValidateEnvName(env); err == nil {
 			t.Fatalf("ValidateEnvName(%q) returned nil", env)
