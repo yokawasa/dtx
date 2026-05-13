@@ -24,11 +24,10 @@ _dtx_envs() {
 }
 
 _dtx() {
-  local cur prev cmd arg
+  local cur cmd arg
   local used_verbose=0
   local env_set=0
   cur="${COMP_WORDS[COMP_CWORD]}"
-  prev="${COMP_WORDS[COMP_CWORD-1]}"
 
   if [ "$COMP_CWORD" -eq 1 ]; then
     COMPREPLY=( $(compgen -W "use current ls run edit completion" -- "$cur") )
