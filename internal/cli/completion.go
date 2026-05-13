@@ -175,11 +175,7 @@ const fishCompletion = `function __dtx_envs
     if test -d "$dtx_home/envs"
         for file in "$dtx_home"/envs/*.enc
             if test -f "$file"
-        for file in "$dtx_home"/envs/*.enc
-            if test -f "$file"
                 string replace -r '\.enc$' '' -- (path basename "$file")
-            end
-        end
             end
         end
     end
