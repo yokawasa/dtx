@@ -134,7 +134,6 @@ _dtx() {
       for (( i = 3; i < CURRENT; i++ )); do
         arg="${words[i]}"
         if [[ "$arg" == "--" ]]; then
-          _normal
           return
         fi
         if [[ "$arg" == "--verbose" ]]; then
