@@ -83,6 +83,11 @@ complete -o bashdefault -o default -F _dtx dtx
 
 const zshCompletion = `#compdef dtx
 
+if ! whence compdef >/dev/null 2>&1; then
+  autoload -Uz compinit
+  compinit
+fi
+
 _dtx_env_names() {
   local dtx_home
   dtx_home=${DTX_HOME:-$HOME/.dtx}

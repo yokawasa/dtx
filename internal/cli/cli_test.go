@@ -340,6 +340,7 @@ func TestCompletionOutputsShellScript(t *testing.T) {
 			shell: "zsh",
 			wantContains: []string{
 				"#compdef dtx",
+				"autoload -Uz compinit",
 				"_dtx_env_names()",
 				"compdef _dtx dtx",
 				"completion:generate shell completion",

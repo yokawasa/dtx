@@ -128,7 +128,6 @@ Examples for shell setup:
 echo 'source <(dtx completion bash)' >> ~/.bashrc
 
 # zsh
-echo 'autoload -Uz compinit && compinit' >> ~/.zshrc
 echo 'source <(dtx completion zsh)' >> ~/.zshrc
 
 # fish
