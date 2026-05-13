@@ -96,6 +96,7 @@ dtx use <env>               Set the current env
 dtx current                 Print the current env
 dtx ls                      List available envs
 dtx run [env] -- <command>  Run a command with an env
+dtx completion <shell>      Generate shell completion
 ```
 
 Notes:
@@ -103,6 +104,36 @@ Notes:
 * `dtx run` only interprets dtx options before `--`.
 * Everything after `--` is passed to the target command unchanged.
 * If no env is passed to `dtx run`, `dtx` uses the current env.
+
+## Shell Completion
+
+Generate completion for `bash`, `zsh`, or `fish`:
+
+```bash
+dtx completion bash
+dtx completion zsh
+dtx completion fish
+```
+
+The generated scripts complete:
+
+* subcommands
+* env names from `~/.dtx/envs/`
+* `dtx run` options such as `--verbose`
+
+Examples for shell setup:
+
+```bash
+# bash
+echo 'source <(dtx completion bash)' >> ~/.bashrc
+
+# zsh
+echo 'autoload -Uz compinit && compinit' >> ~/.zshrc
+echo 'source <(dtx completion zsh)' >> ~/.zshrc
+
+# fish
+dtx completion fish > ~/.config/fish/completions/dtx.fish
+```
 
 ## Storage Layout
 

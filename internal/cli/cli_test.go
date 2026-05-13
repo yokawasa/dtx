@@ -291,6 +291,11 @@ func TestUsageErrorsPrintPlainUsageAndExitSilently(t *testing.T) {
 			args:       []string{"edit", "dev", "prod"},
 			wantStderr: "usage: dtx edit <env> [--verbose]\n",
 		},
+		{
+			name:       "completion args",
+			args:       []string{"completion"},
+			wantStderr: "usage: dtx completion <bash|zsh|fish>\n",
+		},
 	}
 
 	for _, tt := range tests {
@@ -313,6 +318,60 @@ func TestUsageErrorsPrintPlainUsageAndExitSilently(t *testing.T) {
 			}
 			if got := stderr.String(); got != tt.wantStderr {
 				t.Fatalf("stderr = %q, want %q", got, tt.wantStderr)
+			}
+		})
+	}
+}
+
+func TestCompletionOutputsShellScript(t *testing.T) {
+	tests := []struct {
+		shell        string
+		wantContains []string
+	}{
+		{
+			shell: "bash",
+			wantContains: []string{
+				"_dtx_envs()",
+				"complete -o bashdefault -o default -F _dtx dtx",
+				"use current ls run edit completion",
+			},
+		},
+		{
+			shell: "zsh",
+			wantContains: []string{
+				"#compdef dtx",
+				"_dtx_env_names()",
+				"compdef _dtx dtx",
+				"completion:generate shell completion",
+			},
+		},
+		{
+			shell: "fish",
+			wantContains: []string{
+				"function __dtx_envs",
+				"complete -c dtx -n '__fish_use_subcommand' -a 'use current ls run edit completion'",
+				"complete -c dtx -n '__fish_seen_subcommand_from run; and __dtx_run_needs_separator' -a --",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.shell, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			err := Run([]string{"completion", tt.shell}, nil, &stdout, &stderr)
+			if err != nil {
+				t.Fatalf("completion failed: %v", err)
+			}
+			if got := stderr.String(); got != "" {
+				t.Fatalf("stderr = %q", got)
+			}
+			output := stdout.String()
+			for _, want := range tt.wantContains {
+				if !strings.Contains(output, want) {
+					t.Fatalf("completion output missing %q\noutput:\n%s", want, output)
+				}
 			}
 		})
 	}
