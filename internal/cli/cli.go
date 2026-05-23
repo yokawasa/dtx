@@ -16,6 +16,14 @@ const usage = `Usage:
   dtx run [env] [--verbose] -- <command>
   dtx edit <env> [--verbose]
   dtx completion <bash|zsh|fish>
+
+Commands:
+  dtx use <env>                           Set the current env
+  dtx current                             Print the current env
+  dtx ls                                  List available envs
+  dtx run [env] [--verbose] -- <command>  Run a command with an env
+  dtx edit <env> [--verbose]              Create or edit an encrypted env
+  dtx completion <bash|zsh|fish>          Generate shell completion
 `
 
 func Run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
