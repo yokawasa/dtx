@@ -27,6 +27,9 @@ dtx use dev
 dtx run -- npm start
 ```
 
+![](assets/dtx-usage.gif)
+
+
 ## Requirements
 
 `dtx` depends on the `dotenvx` CLI for encryption, decryption, and runtime env injection.
