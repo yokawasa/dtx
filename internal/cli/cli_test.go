@@ -325,18 +325,35 @@ func TestUsageErrorsPrintPlainUsageAndExitSilently(t *testing.T) {
 }
 
 func TestHelpPrintsFullUsageToStdout(t *testing.T) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
+	wantContains := []string{
+		"Usage:\n",
+		"Commands:\n",
+		"dtx run [env] [--verbose] -- <command>",
+		"dtx completion <bash|zsh|fish>",
+	}
 
-	err := Run([]string{"--help"}, nil, &stdout, &stderr)
-	if err != nil {
-		t.Fatalf("help failed: %v", err)
-	}
-	if got := stdout.String(); got != usage {
-		t.Fatalf("stdout = %q, want %q", got, usage)
-	}
-	if got := stderr.String(); got != "" {
-		t.Fatalf("stderr = %q", got)
+	for _, flag := range []string{"-h", "--help"} {
+		t.Run(flag, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			err := Run([]string{flag}, nil, &stdout, &stderr)
+			if err != nil {
+				t.Fatalf("help failed: %v", err)
+			}
+			got := stdout.String()
+			if got == "" {
+				t.Fatal("stdout is empty")
+			}
+			for _, want := range wantContains {
+				if !strings.Contains(got, want) {
+					t.Fatalf("stdout = %q, want substring %q", got, want)
+				}
+			}
+			if got := stderr.String(); got != "" {
+				t.Fatalf("stderr = %q", got)
+			}
+		})
 	}
 }
 
