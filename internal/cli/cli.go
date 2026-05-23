@@ -18,11 +18,11 @@ const usage = `Usage:
   dtx completion <bash|zsh|fish>
 
 Commands:
-  dtx edit <env> [--verbose]              Create or edit an encrypted env
   dtx use <env>                           Set the current env
   dtx current                             Print the current env
   dtx ls                                  List available envs
   dtx run [env] [--verbose] -- <command>  Run a command with an env
+  dtx edit <env> [--verbose]              Create or edit an encrypted env
   dtx completion <bash|zsh|fish>          Generate shell completion
 `
 
