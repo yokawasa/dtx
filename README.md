@@ -43,6 +43,24 @@ Then install `dtx`:
 go install github.com/yokawasa/dtx/cmd/dtx@latest
 ```
 
+Or download a prebuilt binary from [GitHub Releases](https://github.com/yokawasa/dtx/releases):
+
+* `dtx_linux_amd64.tar.gz` for Linux on x86_64
+* `dtx_linux_arm64.tar.gz` for Linux on ARM64
+* `dtx_darwin_amd64.tar.gz` for macOS on Intel
+* `dtx_darwin_arm64.tar.gz` for macOS on Apple Silicon
+* `dtx_windows_amd64.zip` for Windows on x86_64
+
+For example, on macOS with Apple Silicon:
+
+```bash
+curl -fLo dtx_darwin_arm64.tar.gz https://github.com/yokawasa/dtx/releases/latest/download/dtx_darwin_arm64.tar.gz
+tar -xzf dtx_darwin_arm64.tar.gz
+install dtx /usr/local/bin/dtx
+```
+
+You can also verify the downloaded archive with `checksums.txt` from the same release.
+
 Requirements:
 
 * Go 1.21 or later to install from source with `go install`
