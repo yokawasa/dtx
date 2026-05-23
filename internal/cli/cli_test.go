@@ -324,6 +324,22 @@ func TestUsageErrorsPrintPlainUsageAndExitSilently(t *testing.T) {
 	}
 }
 
+func TestHelpPrintsFullUsageToStdout(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := Run([]string{"--help"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+	if got := stdout.String(); got != usage {
+		t.Fatalf("stdout = %q, want %q", got, usage)
+	}
+	if got := stderr.String(); got != "" {
+		t.Fatalf("stderr = %q", got)
+	}
+}
+
 func TestCompletionOutputsShellScript(t *testing.T) {
 	tests := []struct {
 		shell        string
